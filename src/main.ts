@@ -9,7 +9,7 @@ import { CITATIONS, WEIGHT_SOURCES, WEIGHT_SOURCE_IDS } from "./engine/sources";
 import type { Judgement, WeightSourceId } from "./engine/types";
 import { extract, glinerInfo, loadGliner, type GlinerProgress, type GlinerSpan } from "./gliner";
 import * as audio from "./audio";
-import { initShare, type ShareInfo } from "./share";
+import { initShare, type ShareInfo, type ShareSound } from "./share";
 import {
   BADGES, PILL_LABEL, PROXY_NOTE, SOURCES_URL, WELFARE_RANGE, explainLine, lineLabel, unitLines, weightLines,
 } from "./explain";
@@ -83,6 +83,7 @@ else addEventListener("load", lazy, { once: true });
 if (reduced()) toggle.hidden = true;
 reducedQ.addEventListener("change", () => (toggle.hidden = reduced()));
 toggle.addEventListener("click", () => {
+  void audio.play("ui-tick", 0.4);
   const on = toggle.getAttribute("aria-pressed") !== "true";
   toggle.setAttribute("aria-pressed", String(on));
   toggle.textContent = on ? SITE.playWall : SITE.pauseWall;
@@ -100,6 +101,7 @@ const aboutEl = $("about");
 document.body.appendChild(aboutEl);
 function setAbout(open: boolean, refocus = false) {
   if (open === !aboutEl.hidden) return;
+  void audio.play(open ? "ui-slide-open" : "ui-slide-close", 0.3);
   aboutEl.hidden = !open;
   aboutBtn.setAttribute("aria-expanded", String(open));
   document.body.classList.toggle("about-open", open);
@@ -168,7 +170,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
 interface Pop {
   btn: HTMLButtonElement;
   el: HTMLElement;
-  close: (refocus?: boolean) => void;
+  close: (refocus?: boolean, quiet?: boolean) => void;
   place: () => void;
   refresh: () => void;
 }
@@ -213,14 +215,16 @@ function makePop(btn: HTMLButtonElement, id: string, label: string, render: () =
     el.innerHTML = render();
     place();
   };
-  const close = (refocus = false) => {
+  const close = (refocus = false, quiet = false) => {
     if (el.hidden) return;
+    if (!quiet) void audio.play("ui-pop-close", 0.25);
     el.hidden = true;
     btn.setAttribute("aria-expanded", "false");
     if (refocus) btn.focus({ preventScroll: true });
   };
   const open = () => {
-    for (const p of pops) if (p.btn !== btn) p.close();
+    for (const p of pops) if (p.btn !== btn) p.close(false, true);
+    void audio.play("ui-pop-open", 0.3);
     el.hidden = false;
     btn.setAttribute("aria-expanded", "true");
     el.innerHTML = render();
@@ -230,7 +234,7 @@ function makePop(btn: HTMLButtonElement, id: string, label: string, render: () =
   btn.addEventListener("click", () => (el.hidden ? open() : close()));
   el.addEventListener("focusout", (e) => {
     const to = e.relatedTarget as Node | null;
-    if (to && !el.contains(to) && to !== btn) close();
+    if (to && !el.contains(to) && to !== btn) close(false, true);
   });
   const pop = { btn, el, close, place, refresh };
   pops.push(pop);
@@ -246,7 +250,9 @@ document.addEventListener("keydown", (e) => {
 });
 document.addEventListener("pointerdown", (e) => {
   const t = e.target as Node;
-  for (const p of pops) if (!p.el.hidden && !p.el.contains(t) && !p.btn.contains(t)) p.close();
+  // A press on another popup's button closes this one quietly: that popup's open sound covers both.
+  const quiet = t instanceof Element && t.closest("[aria-haspopup]") !== null;
+  for (const p of pops) if (!p.el.hidden && !p.el.contains(t) && !p.btn.contains(t)) p.close(false, quiet);
 });
 
 const sourcesLink = `<a href="${SOURCES_URL}" target="_blank" rel="noopener">SOURCES.md</a>`;
@@ -385,6 +391,7 @@ for (const chip of pool) {
   const c = { btn: b, chip, last: -1 };
   b.addEventListener("click", () => {
     textEl.value = pickText(c);
+    void audio.play("ui-peel", 0.45);
     textEl.dispatchEvent(new Event("input"));
     judgeBtn.focus({ preventScroll: true });
   });
@@ -533,7 +540,7 @@ function renderLedger(fresh: boolean) {
         if (active === idx) {
           const v = current!.ledger[idx].insects;
           void audio.play(v > 0 ? "sfx-cha-ching" : v < 0 ? "sfx-squish" : "bark-welfare-zero", 0.6);
-        }
+        } else void audio.play("ui-tick", 0.4);
       });
       li.appendChild(btn);
       li.appendChild(more);
@@ -693,7 +700,7 @@ function showResult() {
   renderMarks();
   autosize();
   renderScore();
-  pops.forEach((p) => p.close());
+  pops.forEach((p) => p.close(false, true));
   shownNum = 0;
   renderNumbers(first ? 1100 : 800);
 
@@ -938,11 +945,18 @@ function shareInfo(): ShareInfo | null {
   const w = current.totals.bySource[selected].worth;
   return { num: big(w), plainNum: plain(w), caste: current.caste, line: react.line, hero: art(WHO[react.who].hero) };
 }
+const SHARE_SOUND = {
+  sent: ["sfx-airhorn", 0.6], link: ["ui-ding", 0.4], card: ["ui-shutter", 0.45],
+  open: ["ui-pop-open", 0.3], close: ["ui-pop-close", 0.25], fail: ["sfx-sad-trombone", 0.6],
+} as const satisfies Record<ShareSound, readonly [audio.Sfx, number]>;
 const share = initShare({
   row: actions,
   get: shareInfo,
   stickers: CARD_STICKERS.map(art).filter(Boolean),
-  sound: (ok) => void audio.play(ok ? "sfx-airhorn" : "sfx-sad-trombone", 0.6),
+  sound: (k) => {
+    const [id, g] = SHARE_SOUND[k];
+    void audio.play(id, g);
+  },
 });
 
 autosize();
@@ -1008,7 +1022,10 @@ function startBrain() {
 }
 
 brainGo.textContent = STATUS.brainOptIn(BRAIN_MB);
-brainGo.addEventListener("click", startBrain);
+brainGo.addEventListener("click", () => {
+  void audio.play("ui-stamp", 0.45);
+  startBrain();
+});
 const idleThen = (cb: () => void) =>
   "requestIdleCallback" in window ? requestIdleCallback(cb, { timeout: 2500 }) : setTimeout(cb, 1200);
 const bootBrain = () =>
@@ -1037,8 +1054,15 @@ function syncSound() {
 }
 audio.onChange(syncSound);
 syncSound();
-sfxBtn.addEventListener("click", () => audio.setSfx(!audio.state().sfx));
-musicBtn.addEventListener("click", () => audio.setMusic(!audio.state().music));
+sfxBtn.addEventListener("click", () => {
+  const on = !audio.state().sfx;
+  audio.setSfx(on);
+  if (on) void audio.play("ui-tick", 0.4);
+});
+musicBtn.addEventListener("click", () => {
+  void audio.play("ui-tick", 0.4);
+  audio.setMusic(!audio.state().music);
+});
 // Nothing loads or plays before the first gesture.
 const firstGesture = () => audio.unlock();
 addEventListener("pointerdown", firstGesture, { once: true, capture: true });

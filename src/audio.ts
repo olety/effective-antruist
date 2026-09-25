@@ -14,7 +14,8 @@ export type Sfx =
   | "sfx-blub" | "sfx-nerd-gasp" | "sfx-sad-trombone" | "sfx-synth-stab" | "sfx-evil-laugh"
   | "bark-ackshually" | "bark-based" | "bark-cringe" | "bark-shrimp-council" | "bark-welfare-zero"
   | "vo-ai-god" | "vo-bug-lives" | "vo-date-shrimp" | "vo-nooo" | "vo-polycule" | "vo-save-shrimps" | "vo-trillions"
-  | "loop-chant" | "loop-swarm";
+  | "loop-chant" | "loop-swarm"
+  | "ui-peel" | "ui-pop-open" | "ui-pop-close" | "ui-slide-open" | "ui-slide-close" | "ui-tick" | "ui-shutter" | "ui-ding" | "ui-stamp";
 
 const BASE = `${import.meta.env.BASE_URL}audio/`;
 const MUSIC = "site-loop";
@@ -186,7 +187,7 @@ export function unlock() {
   unlocked = true;
   void c.resume().catch(() => {});
   const warm = () => {
-    for (const id of ["sfx-keysmash", "sfx-slot-count", "sfx-boom", "sfx-scratch", "sfx-cha-ching", "loop-swarm"]) void load(id);
+    for (const id of ["sfx-keysmash", "sfx-slot-count", "sfx-boom", "sfx-scratch", "sfx-cha-ching", "loop-swarm", "ui-peel", "ui-pop-open", "ui-pop-close", "ui-tick"]) void load(id);
   };
   if (sfxOn) warm();
   if (musicOn) void startMusic();

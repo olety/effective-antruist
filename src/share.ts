@@ -21,8 +21,10 @@ export interface ShareDeps {
   get(): ShareInfo | null;
   /** Wall sticker URLs for the card's background. */
   stickers: string[];
-  sound(ok: boolean): void;
+  sound(kind: ShareSound): void;
 }
+
+export type ShareSound = "sent" | "link" | "card" | "open" | "close" | "fail";
 
 // ---- text -------------------------------------------------------------------------------------
 
@@ -348,43 +350,43 @@ export function initShare(d: ShareDeps) {
     a.rel = "noopener noreferrer";
     a.textContent = l.label;
     a.addEventListener("click", () => {
-      d.sound(true);
-      close(true);
+      d.sound("sent");
+      close(true, true);
     });
     links.set(l.id, a);
     grid.appendChild(a);
   }
-  const action = (label: string, fn: () => Promise<string | null>) => {
+  const action = (label: string, kind: ShareSound, fn: () => Promise<string | null>) => {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "share-it share-act";
     b.setAttribute("role", "menuitem");
     b.textContent = label;
     b.addEventListener("click", async () => {
-      close(true);
+      close(true, true);
       let msg: string | null = SHARE.failed;
       try {
         msg = await fn();
       } catch {
         msg = SHARE.failed;
       }
-      if (msg) flash(msg, msg !== SHARE.failed);
+      if (msg) flash(msg, msg !== SHARE.failed ? kind : "fail");
     });
     grid.appendChild(b);
     return b;
   };
-  action(SHARE.copyLink, async () => {
+  action(SHARE.copyLink, "link", async () => {
     await navigator.clipboard.writeText(SITE.url);
     return SHARE.linkCopied;
   });
-  const copyCardBtn = action(SHARE.copyCard, async () => {
+  const copyCardBtn = action(SHARE.copyCard, "card", async () => {
     const i = d.get();
     if (!i) return null;
     await navigator.clipboard.write([new ClipboardItem({ "image/png": card(i) })]);
     return SHARE.cardCopied;
   });
   copyCardBtn.hidden = !canCopyImage();
-  action(SHARE.saveCard, async () => {
+  action(SHARE.saveCard, "card", async () => {
     const i = d.get();
     if (!i) return null;
     const url = URL.createObjectURL(await card(i));
@@ -429,9 +431,9 @@ export function initShare(d: ShareDeps) {
 
   // ---- popover
   let flashT = 0;
-  function flash(msg: string, ok: boolean) {
+  function flash(msg: string, kind: ShareSound) {
     btn.textContent = msg;
-    d.sound(ok);
+    d.sound(kind);
     clearTimeout(flashT);
     flashT = window.setTimeout(() => (btn.textContent = SHARE.button), 1600);
   }
@@ -451,9 +453,11 @@ export function initShare(d: ShareDeps) {
     if (dx) menu.style.setProperty("--dx", `${Math.round(dx)}px`);
     items()[0]?.focus({ preventScroll: true });
     void card(i).catch(() => {});
+    d.sound("open");
   }
-  function close(refocus: boolean) {
+  function close(refocus: boolean, quiet = false) {
     if (menu.hidden) return;
+    if (!quiet) d.sound("close");
     menu.hidden = true;
     btn.setAttribute("aria-expanded", "false");
     if (refocus) btn.focus({ preventScroll: true });
@@ -471,7 +475,7 @@ export function initShare(d: ShareDeps) {
       if (file && nav.canShare({ files: [file] })) {
         try {
           await nav.share({ files: [file], title: SITE.title, text: shareLine(i), url: SITE.url });
-          d.sound(true);
+          d.sound("sent");
           return;
         } catch (e) {
           if ((e as DOMException)?.name === "AbortError") return;
@@ -491,7 +495,7 @@ export function initShare(d: ShareDeps) {
     else if (e.key === "ArrowUp" || e.key === "ArrowLeft") go(at - 1);
     else if (e.key === "Home") go(0);
     else if (e.key === "End") go(list.length - 1);
-    else if (e.key === "Tab") close(false);
+    else if (e.key === "Tab") close(false, true);
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || menu.hidden) return;
@@ -500,8 +504,10 @@ export function initShare(d: ShareDeps) {
     close(true);
   });
   document.addEventListener("pointerdown", (e) => {
-    if (!menu.hidden && !wrapEl.contains(e.target as Node)) close(false);
+    const t = e.target as Node;
+    // A press on another popup's button closes the menu quietly: that popup's open sound covers both.
+    if (!menu.hidden && !wrapEl.contains(t)) close(false, t instanceof Element && t.closest("[aria-haspopup]") !== null);
   });
 
-  return { refresh, close: () => close(false), card: (i: ShareInfo) => card(i) };
+  return { refresh, close: () => close(false, true), card: (i: ShareInfo) => card(i) };
 }
