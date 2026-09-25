@@ -1,6 +1,11 @@
-name = "hackyard-yard3"
+name = "effective-antruist"
+account_id = "70ae12731f3e503777d9f59a6c2c18da"
 main = "worker/index.ts"
 compatibility_date = "2026-09-01"
+routes = [
+  { pattern = "effectiveantruist.com", custom_domain = true },
+  { pattern = "www.effectiveantruist.com", custom_domain = true },
+]
 
 [assets]
 directory = "./dist"
