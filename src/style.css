@@ -44,6 +44,7 @@ body {
 button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 .btn:focus-visible, .copy:focus-visible, .pill:focus-visible { outline-color: var(--hi); outline-offset: 5px; }
+[hidden] { display: none !important; }
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -129,13 +130,19 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 }
 .field textarea::placeholder { color: #6f8f2a; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 15.5px; }
 
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.try { font: 700 12px/1 var(--body); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-right: 2px; }
+/* TRY + the chips fill the card's width: equal columns, even rows (main.ts sets --cols). */
+.try-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.try { flex: 0 0 auto; font: 700 12px/1 var(--body); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.chips {
+  flex: 1 1 auto; min-width: 0;
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 6px;
+}
 .chip {
-  font: 700 13px/1 var(--body);
-  min-height: 36px; padding: 0 12px;
+  min-width: 0;
+  font: 700 13px/1.1 var(--body);
+  min-height: 36px; padding: 3px 10px;
   border-radius: 999px; border: 2px solid var(--ink); background: var(--paper);
+  text-wrap: balance;
   transition: background-color 0.12s ease-out, transform 0.12s ease-out;
 }
 .chip:hover { background: var(--hi); }
@@ -143,6 +150,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
 
 .btn {
+  display: block; width: 100%; margin-top: 12px;
   font-family: var(--meme); font-size: 27px; line-height: 1; letter-spacing: 0.03em;
   color: var(--paper); background: var(--red);
   border: 3px solid var(--ink); border-radius: 14px;
@@ -150,14 +158,12 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   box-shadow: 0 4px 0 var(--ink);
   transition: transform 0.12s ease-out, box-shadow 0.12s ease-out, background-color 0.12s ease-out;
 }
-.btn:hover { transform: translateY(-1px) rotate(-1deg); box-shadow: 0 5px 0 var(--ink); }
+.btn:hover { transform: translateY(-1px) rotate(-0.4deg); box-shadow: 0 5px 0 var(--ink); }
 .btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 .btn[aria-busy="true"] { background: #b71c24; cursor: progress; }
 .status { margin: 10px 2px 0; font: 13px/1.35 var(--body); color: var(--muted); min-height: 0; }
 .status:empty { display: none; }
 .status.err { color: var(--red); font-weight: 700; }
-.brain { margin: 8px 2px 0; font: 12px/1.3 var(--body); color: #8a8095; display: flex; gap: 8px; align-items: center; min-height: 16px; }
-.brain:has(> span:empty):has(> button[hidden]) { display: none; }
 .brain-go {
   font: 700 12px/1 var(--body); color: var(--ink);
   background: none; border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px;
@@ -257,17 +263,59 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .copy:hover { background: var(--hi); }
 .copy:active { transform: scale(0.97); }
 
-.foot { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
-.foot p {
-  margin: 0; font: 700 12px/1.3 var(--body); color: var(--paper);
-  background: rgba(20, 17, 22, 0.86); padding: 6px 10px; border-radius: 6px;
-}
-.foot a { color: var(--hi); }
-.wall-toggle {
+.foot { position: relative; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
+.foot-btn {
   font: 700 12px/1 var(--body); color: var(--ink);
   background: var(--paper); border: 2px solid var(--ink); border-radius: 999px;
   min-height: 30px; padding: 0 12px;
+  transition: background-color 0.12s ease-out, color 0.12s ease-out;
 }
+.foot-btn:hover { background: var(--hi); }
+.foot-btn[aria-expanded="true"] { background: var(--ink); color: var(--paper); }
+
+/* ---- about this page: a sticker card over the page, anchored above its pill ---------- */
+.about {
+  position: absolute; z-index: 10;
+  left: 50%; bottom: calc(100% + 16px); translate: -50% 0;
+  width: min(540px, calc(100vw - 32px)); max-height: min(74vh, 600px); overflow-y: auto;
+  padding: 16px 18px 16px;
+  text-align: left;
+  transform-origin: 50% 100%;
+  animation: about-in 0.18s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.about:focus { outline: none; }
+.about:focus-visible { outline: 3px solid var(--hi); outline-offset: 9px; }
+@keyframes about-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
+.about-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.about h2 {
+  margin: 0; display: inline-block;
+  font: 400 22px/1 var(--meme); letter-spacing: 0.03em;
+  background: var(--ink); color: var(--paper);
+  padding: 6px 10px 5px; border-radius: 7px; transform: rotate(-1.2deg);
+}
+.about-x {
+  flex: 0 0 auto; width: 36px; height: 36px; padding: 0; display: grid; place-items: center;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 999px;
+  transition: background-color 0.12s ease-out;
+}
+.about-x:hover { background: var(--hi); }
+.about-x svg { width: 18px; height: 18px; fill: none; stroke: var(--ink); stroke-width: 2.8; stroke-linecap: round; }
+.about-what { margin: 0 0 6px; font: 700 15px/1.35 var(--body); }
+.about-how { margin: 0 0 12px; font: 14px/1.45 var(--body); }
+.about-live {
+  display: grid; gap: 6px; margin-bottom: 12px; padding: 9px 12px;
+  background: var(--well); border: 2px solid #d8cde6; border-radius: 12px;
+}
+.live-row { margin: 0; display: grid; grid-template-columns: 6.6em minmax(0, 1fr); gap: 10px; align-items: baseline; font: 13px/1.4 var(--body); }
+.live-k { font: 700 11px/1.4 var(--body); color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.live-v { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; overflow-wrap: anywhere; }
+.meter {
+  display: inline-block; width: 96px; height: 9px; overflow: hidden;
+  background: var(--paper); border: 2px solid var(--ink); border-radius: 999px;
+}
+.meter > span { display: block; width: 0; height: 100%; background: var(--violet); transition: width 0.2s linear; }
+.about-credit { margin: 0; font: 12px/1.45 var(--body); color: var(--muted); }
+.about-credit a { color: var(--ink); font-weight: 700; }
 
 /* ---- sound switches (top right) ------------------------------------------------ */
 .sound {
@@ -294,8 +342,6 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .stage[data-state="result"] .caption { font-size: clamp(32px, 8.4vw, 54px); }
 .stage[data-state="result"] .hero { gap: 12px; }
 .stage[data-state="result"] .strip { display: none; }
-/* Once the bug brain is up, the status line under the button already says so. */
-.stage[data-state="result"] .brain[data-brain="ready"] { display: none; }
 
 @media (min-width: 1000px) {
   .stage[data-state="result"] {
@@ -331,7 +377,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   .stage[data-state="result"] .caption { font-size: clamp(34px, 3.3vw, 46px); }
   .stage[data-state="result"] .input-card { padding: 12px; }
   .stage[data-state="result"] .field textarea { min-height: 84px; }
-  .stage[data-state="result"] .row { margin-top: 8px; }
+  .stage[data-state="result"] .try-row, .stage[data-state="result"] .btn { margin-top: 8px; }
   .stage[data-state="result"] .hello { font-size: 36px; }
   .stage[data-state="result"] .mwi { margin: 0 0 6px !important; }
   .stage[data-state="result"] .write { padding: 8px 10px 6px; }
@@ -344,16 +390,15 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   .stage[data-state="result"] .reaction img.wide { width: min(46%, 210px); }
   .stage[data-state="result"] .bubble { margin-bottom: 3%; }
   .stage[data-state="result"] .foot { margin-top: 0; gap: 8px; }
-  .stage[data-state="result"] .foot p { font-size: 11px; line-height: 1.25; padding: 4px 8px; }
-  .stage[data-state="result"] .wall-toggle { min-height: 26px; font-size: 11px; }
+  .stage[data-state="result"] .foot-btn { min-height: 26px; font-size: 11px; }
 }
 
 @media (max-width: 560px) {
   .sound { position: absolute; }
   .stage { gap: 22px; padding-top: max(64px, 6vh); }
-  .row { flex-direction: column; align-items: stretch; }
-  .chips { justify-content: center; }
-  .btn { width: 100%; }
+  .try-row { flex-direction: column; align-items: stretch; gap: 7px; }
+  .try { padding-left: 2px; }
+  .chips { grid-template-columns: repeat(var(--cols-phone, 2), minmax(0, 1fr)); }
   .strip { font-size: 14px; }
   .hello { font-size: 40px; }
   .num { font-size: 52px; }
@@ -366,8 +411,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   .brain-go { min-height: 40px; }
   .chip { min-height: 44px; }
   .pill { min-height: 44px; }
-  .foot a { color: var(--hi); }
-.wall-toggle { min-height: 40px; }
+  .foot-btn { min-height: 40px; }
 }
 
 /* ---- entrances ----------------------------------------------------------------- */
@@ -399,5 +443,6 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
     animation: fade 0.2s ease-out both;
   }
   .field.shake { animation: none; border-color: var(--red); }
+  .about { animation: fade 0.15s ease-out both; }
   .btn:hover, .btn:active, .chip:active, .pill:active, .copy:active { transform: none; }
 }

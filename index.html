@@ -44,12 +44,12 @@
           <div class="hl" id="hl" aria-hidden="true"></div>
           <textarea id="text" maxlength="1500" rows="4" spellcheck="false" placeholder="%SITE_placeholder%"></textarea>
         </div>
-        <div class="row">
-          <div class="chips" id="chips"><span class="try">%SITE_try%</span></div>
-          <button id="judge" class="btn" type="button">%SITE_button%</button>
+        <div class="try-row">
+          <span class="try" id="tryLabel">%SITE_try%</span>
+          <div class="chips" id="chips" role="group" aria-labelledby="tryLabel"></div>
         </div>
+        <button id="judge" class="btn" type="button">%SITE_button%</button>
         <p class="status" id="status" role="status"></p>
-        <p class="brain" id="brain"><span id="brainText"></span><button class="brain-go" id="brainGo" type="button" hidden></button></p>
       </section>
 
       <section class="result" id="result" hidden aria-label="Your result">
@@ -86,8 +86,29 @@
       <p class="sr-only" id="announce" aria-live="polite"></p>
 
       <footer class="foot" id="foot">
-        <p>%SITE_credit% <a href="%SITE_repo%" target="_blank" rel="noopener">%SITE_source%</a></p>
-        <button class="wall-toggle" id="wallToggle" type="button" aria-pressed="false">%SITE_pauseWall%</button>
+        <button class="foot-btn" id="aboutBtn" type="button" aria-expanded="false" aria-controls="about">%SITE_about%</button>
+        <section class="card about" id="about" role="dialog" aria-modal="false" aria-labelledby="aboutTitle" tabindex="-1" hidden>
+          <div class="about-head">
+            <h2 id="aboutTitle">%SITE_aboutTitle%</h2>
+            <button class="about-x" id="aboutClose" type="button" aria-label="%SITE_aboutClose%" title="%SITE_aboutClose%">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+          <p class="about-what">%SITE_aboutWhat%</p>
+          <p class="about-how">%SITE_aboutHow%</p>
+          <div class="about-live" aria-live="polite">
+            <p class="live-row" id="brain" data-brain="idle">
+              <span class="live-k">%SITE_aboutBrain%</span>
+              <span class="live-v"><span id="brainText">%SITE_brainIdle%</span><span class="meter" id="brainMeter" hidden><span id="brainBar"></span></span><button class="brain-go" id="brainGo" type="button" hidden></button></span>
+            </p>
+            <p class="live-row" id="lastRow" hidden>
+              <span class="live-k">%SITE_aboutLast%</span>
+              <span class="live-v" id="lastText"></span>
+            </p>
+          </div>
+          <p class="about-credit">%SITE_credit% <a href="%SITE_repo%" target="_blank" rel="noopener">%SITE_source%</a></p>
+        </section>
+        <button class="foot-btn wall-toggle" id="wallToggle" type="button" aria-pressed="false">%SITE_pauseWall%</button>
       </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>

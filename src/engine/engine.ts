@@ -43,7 +43,9 @@ const NUMBER_WORDS: Record<string, number> = {
 export function parseCount(s: string): number {
   const d = s.match(/\d+/);
   if (d) return Number(d[0]);
-  const w = s.toLowerCase().match(/\b(a|an|one|my|our|two|three|four|five|six|seven|eight|nine|ten)\b/);
+  // A count word beats a leading article or possessive: "my two cats" is 2, not 1.
+  const low = s.toLowerCase();
+  const w = low.match(/\b(two|three|four|five|six|seven|eight|nine|ten)\b/) ?? low.match(/\b(a|an|one|my|our)\b/);
   if (w) return NUMBER_WORDS[w[1]];
   return /s\b/i.test(s.trim()) ? 2 : 1;
 }

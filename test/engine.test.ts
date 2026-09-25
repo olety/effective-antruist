@@ -37,6 +37,8 @@ describe("parsers", () => {
     expect(parseCount("two cats")).toBe(2);
     expect(parseCount("3 dogs")).toBe(3);
     expect(parseCount("my cat")).toBe(1);
+    expect(parseCount("my two cats")).toBe(2);
+    expect(parseCount("our three dogs")).toBe(3);
   });
   test("parseUsd", () => {
     expect(parseUsd("$20").usd).toBe(20);

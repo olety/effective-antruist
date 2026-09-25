@@ -115,7 +115,7 @@ export function reaction(j: Judgement, fmt: (n: number) => string, used: Set<str
   const circle = j.jev.answers.circle;
   const sk = noul(j, "skittles");
   const bits: string[] = [];
-  if (caste?.type === "choice") bits.push(`Jev: ${caste.choice}, ${pct(caste.probabilities?.[caste.choice] ?? caste.confidence)}`);
+  if (caste?.type === "choice") bits.push(`caste: ${caste.choice}, ${pct(caste.probabilities?.[caste.choice] ?? caste.confidence)}`);
   if (circle?.type === "score") bits.push(`moral circle: ${circle.legend?.[String(Math.round(circle.score))] ?? circle.score}`);
   if (Number.isFinite(sk)) bits.push(`Skittles for shrimp: ${pct(sk)}`);
   const meta = j.jev.ok ? bits.join(" · ") : JOKES["error.jev_offline"].line;

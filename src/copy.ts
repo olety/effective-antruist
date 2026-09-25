@@ -168,6 +168,18 @@ export const SITE = {
   copyFailed: "COPY FAILED",
   pauseWall: "pause the wall",
   playWall: "play the wall",
+  // The "about this page" panel: how it works, the live model status, the credits.
+  about: "about this page",
+  aboutTitle: "ABOUT THIS PAGE",
+  aboutClose: "close about this page",
+  aboutWhat: "A parody of moral maths. Paste a bio or your day, and we price you in insects.", // DRAFT: owner pass
+  aboutHow:
+    "GLiNER2.5 small runs in your browser and finds the food, pets, money and sins. " +
+    "Jev, a typed decision model, decides the verdicts. Rethink Priorities welfare ranges price each line. " +
+    "Every number is cited in SOURCES.md.", // DRAFT: owner pass
+  aboutBrain: "bug brain",
+  aboutLast: "last result",
+  brainIdle: "waiting for the page to settle", // DRAFT: owner pass
   // Footer credit. The only real person named anywhere, via his real article title.
   credit:
     'A parody. Bentham\'s Bulldog wrote "Insects Matter More Than People in the Aggregate." We did the maths on you. ' +
@@ -177,12 +189,13 @@ export const SITE = {
 
 /** Small status copy for the in-browser GLiNER and the judge. */
 export const STATUS = {
-  brainLoading: (pct: number) => `bug brain: ${pct}%`,
-  brainCompiling: "bug brain: waking up", // DRAFT: owner pass
-  brainReady: "bug brain: GLiNER in your browser",
-  brainFailed: "bug brain failed to load. the regex is judging you.", // DRAFT: owner pass
+  brainIdle: SITE.brainIdle,
+  brainLoading: (pct: number) => `downloading, ${pct}%`,
+  brainCompiling: "waking up", // DRAFT: owner pass
+  brainReady: "GLiNER2.5 small, running in your browser",
+  brainFailed: "failed to load. the regex is judging you.", // DRAFT: owner pass
   brainOptIn: (mb: number) => `load the ${mb} MB bug brain`,
-  brainSkipped: "bug brain skipped to save your data. the regex is judging you.", // DRAFT: owner pass
+  brainSkipped: "skipped to save your data. the regex is judging you.", // DRAFT: owner pass
   buttonWaiting: (pct: number) => `BUG BRAIN ${pct}%`, // DRAFT: owner pass
   spansGliner: "Spans by GLiNER.",
   spansBrowser: "Spans by GLiNER, in your browser.",

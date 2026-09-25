@@ -2,7 +2,7 @@
 // The engine (types, weight sources, client-side reweigh) and the in-browser GLiNER are imported
 // through their public APIs; every word on screen comes from ./copy.
 import "./style.css";
-import { EXAMPLES } from "./examples";
+import { EXAMPLE_POOL, type ExampleChip } from "./example-pool";
 import { JOKES, LOADING_LINES, SITE, SOUND, STATUS, pickJoke } from "./copy";
 import { reweigh } from "./engine/engine";
 import { CITATIONS, WEIGHT_SOURCES, WEIGHT_SOURCE_IDS } from "./engine/sources";
@@ -84,6 +84,36 @@ toggle.addEventListener("click", () => {
   wall.setPaused(on);
 });
 
+// ---- about this page ------------------------------------------------------------------
+// A quiet pill by the wall toggle opens a sticker card over the page: how it works, the live
+// model status, the credits. Second click, the close button, Escape or a click outside shuts it.
+
+const aboutBtn = $<HTMLButtonElement>("aboutBtn");
+const aboutEl = $("about");
+function setAbout(open: boolean, refocus = false) {
+  if (open === !aboutEl.hidden) return;
+  aboutEl.hidden = !open;
+  aboutBtn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    aboutEl.focus({ preventScroll: true });
+    // Phones scroll: make sure the whole card is on screen. A one-screen desktop never moves.
+    const r = aboutEl.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) aboutEl.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
+  } else if (refocus) aboutBtn.focus({ preventScroll: true });
+}
+aboutBtn.addEventListener("click", () => setAbout(Boolean(aboutEl.hidden)));
+$("aboutClose").addEventListener("click", () => setAbout(false, true));
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || aboutEl.hidden) return;
+  e.preventDefault();
+  setAbout(false, aboutEl.contains(document.activeElement));
+});
+document.addEventListener("pointerdown", (e) => {
+  if (aboutEl.hidden) return;
+  const t = e.target as Node;
+  if (!aboutEl.contains(t) && !aboutBtn.contains(t)) setAbout(false);
+});
+
 // ---- numbers --------------------------------------------------------------------
 
 const MINUS = "−";
@@ -163,7 +193,7 @@ function renderMarks() {
 textEl.addEventListener("input", () => {
   autosize();
   renderMarks();
-  for (const b of chipBtns) b.setAttribute("aria-pressed", String(b.dataset.text === textEl.value));
+  syncChips();
   if (current && !busy) judgeBtn.textContent = SITE.buttonAgain;
 });
 textEl.addEventListener("scroll", () => (hl.scrollTop = textEl.scrollTop));
@@ -174,22 +204,39 @@ textEl.addEventListener("keydown", (e) => {
   }
 });
 
+// TRY chips: up to six, each holding several prewritten bios. A click fills the box with a random
+// one of that chip's texts (never the one it showed last) and hands focus to the button.
 const chips = $("chips");
-const chipBtns: HTMLButtonElement[] = [];
-for (const ex of EXAMPLES) {
+const pool = EXAMPLE_POOL.filter((c) => c.texts.length > 0).slice(0, 6);
+const chipBtns: { btn: HTMLButtonElement; chip: ExampleChip; last: number }[] = [];
+/** Even rows: one row when it fits, else two (desktop) or pairs (phone). Read by style.css. */
+const n = pool.length;
+chips.style.setProperty("--cols", String(n <= 4 ? Math.max(n, 1) : Math.ceil(n / 2)));
+chips.style.setProperty("--cols-phone", String(n <= 3 ? Math.max(n, 1) : 2));
+function pickText(c: (typeof chipBtns)[number]): string {
+  const len = c.chip.texts.length;
+  let i = Math.floor(Math.random() * len);
+  if (len > 1 && i === c.last) i = (i + 1 + Math.floor(Math.random() * (len - 1))) % len;
+  c.last = i;
+  return c.chip.texts[i];
+}
+function syncChips() {
+  for (const c of chipBtns) c.btn.setAttribute("aria-pressed", String(c.last >= 0 && c.chip.texts[c.last] === textEl.value));
+}
+for (const chip of pool) {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "chip";
-  b.textContent = ex.label.replace(/^Example [A-Z]:\s*/, "");
-  b.dataset.text = ex.text;
+  b.textContent = chip.label;
   b.setAttribute("aria-pressed", "false");
+  const c = { btn: b, chip, last: -1 };
   b.addEventListener("click", () => {
-    textEl.value = ex.text;
+    textEl.value = pickText(c);
     textEl.dispatchEvent(new Event("input"));
     judgeBtn.focus({ preventScroll: true });
   });
   chips.appendChild(b);
-  chipBtns.push(b);
+  chipBtns.push(c);
 }
 
 // ---- result -----------------------------------------------------------------------
@@ -596,16 +643,15 @@ async function judgeNow() {
     textEl.value = current.text;
     showResult();
     const fromBrowser = j.extractor === "gliner" && /browser/.test(j.extractorNote ?? "") && !/rejected/.test(j.extractorNote ?? "");
-    setStatus(
+    // Who found the spans and who gave the verdicts lives in the about panel; the card keeps only
+    // what the visitor must act on.
+    setLast(
       [
         j.extractor === "gliner" ? (fromBrowser ? STATUS.spansBrowser : STATUS.spansGliner) : STATUS.spansFallback,
         j.jev.ok ? STATUS.jev(j.jev.model ?? "jev", j.jev.ms ?? 0) : STATUS.jevOffline,
-        j.truncated ? STATUS.truncated : "",
-        j.spans.length === 0 ? STATUS.noSpans : "",
-      ]
-        .filter(Boolean)
-        .join(" "),
+      ].join(" "),
     );
+    setStatus([j.truncated ? STATUS.truncated : "", j.spans.length === 0 ? STATUS.noSpans : ""].filter(Boolean).join(" "));
   } catch (err) {
     clearInterval(loadingTimer);
     audio.stopLoop("loop-swarm");
@@ -623,6 +669,13 @@ async function judgeNow() {
 function setStatus(s: string, err = false) {
   statusEl.textContent = s;
   statusEl.classList.toggle("err", err);
+}
+
+const lastRow = $("lastRow");
+/** The last judgement's spans-and-verdicts line, shown in the about panel. */
+function setLast(s: string) {
+  $("lastText").textContent = s;
+  lastRow.hidden = !s;
 }
 
 judgeBtn.addEventListener("click", () => void judgeNow());
@@ -687,6 +740,12 @@ let brain: Brain = "idle";
 let brainPct = 0;
 const brainText = $("brainText");
 const brainGo = $<HTMLButtonElement>("brainGo");
+const brainMeter = $("brainMeter");
+const brainBar = $("brainBar");
+const meter = (pct: number | null) => {
+  brainMeter.hidden = pct === null;
+  if (pct !== null) brainBar.style.width = `${pct}%`;
+};
 
 const nav = navigator as Navigator & { connection?: { saveData?: boolean }; deviceMemory?: number };
 const phone = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, innerWidth) < 760;
@@ -703,9 +762,11 @@ function onBrain(p: GlinerProgress) {
   if (p.phase === "download") {
     brainPct = p.totalBytes ? Math.min(99, Math.floor((p.loadedBytes / p.totalBytes) * 100)) : 0;
     brainText.textContent = STATUS.brainLoading(brainPct);
+    meter(brainPct);
   } else if (p.phase === "compile") {
     brainPct = Math.max(brainPct, 99);
     brainText.textContent = STATUS.brainCompiling;
+    meter(brainPct);
   }
 }
 
@@ -714,15 +775,18 @@ function startBrain() {
   setBrain("loading");
   brainGo.hidden = true;
   brainText.textContent = STATUS.brainLoading(0);
+  meter(0);
   loadGliner({ onProgress: onBrain }).then(
     () => {
       setBrain("ready");
       brainPct = 100;
       brainText.textContent = STATUS.brainReady;
+      meter(null);
     },
     () => {
       setBrain("failed");
       brainText.textContent = STATUS.brainFailed;
+      meter(null);
     },
   );
 }
@@ -735,7 +799,7 @@ const bootBrain = () =>
   idleThen(() => {
     if (!skipAuto) startBrain();
     else {
-      brainText.textContent = "";
+      brainText.textContent = STATUS.brainSkipped;
       brainGo.hidden = false;
     }
   });
