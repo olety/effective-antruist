@@ -25,8 +25,8 @@ const STICKERS = import.meta.glob("./stickers/*.webp", { eager: true, query: "?u
 const art = (name: string) => STICKERS[`./stickers/${name}.webp`];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-/** Total download of the in-browser model (public/model/manifest.json: model + tokenizer + wasm). */
-const BRAIN_MB = 68;
+/** First-visit download of the in-browser model, as sent (gzip model chunks + zstd tokenizer and wasm; public/model/manifest.json). */
+const BRAIN_MB = 45;
 const stage = $("stage");
 const textEl = $<HTMLTextAreaElement>("text");
 const hl = $("hl");
@@ -72,7 +72,7 @@ document.fonts.load("40px Meme", "BUG").finally(() => wall.renderText());
 const lazy = () => {
   // Nothing but the page itself is on the critical path: stickers slap on right after load.
   wall.load(INSECTS);
-  // The desktop model (68 MB on the wire) waits for the wall's stickers, at most 6 s, so it never starves them.
+  // The desktop model (45 MB on the wire) waits for the wall's stickers, at most 6 s, so it never starves them.
   setTimeout(() => void Promise.race([wall.load(), new Promise((r) => setTimeout(r, 6000))]).then(bootBrain), 40);
   const idle = (cb: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(cb, { timeout: 1200 }) : setTimeout(cb, 400));
   idle(() => void document.fonts.load("40px Marker", "0123456789,INSECTS"));

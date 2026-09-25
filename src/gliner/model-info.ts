@@ -4,8 +4,12 @@
 export const MODEL_REPO = "nicolasembleton/gliner2.5-small-v1-onnx";
 /** Hugging Face commit of MODEL_REPO. Every download URL uses it, so the bytes never drift. */
 export const MODEL_REVISION = "5e2e3f51adfb0eeb7c1f83464400b4d498d41659";
-/** How the int8 file was made. Part of the browser cache key. */
-export const QUANT_ID = "onnxruntime-1.30.0/quantize_dynamic/QInt8";
+/**
+ * How the model file was made (scripts/quantize-e4.py): int8 MatMuls plus a 4-bit embedding table.
+ * Part of the browser cache key: a changed id makes returning visitors fetch the model once more,
+ * and the loader then deletes the old files from Cache Storage.
+ */
+export const QUANT_ID = "onnxruntime-1.30.0/e4/MatMul-QInt8+Gather-uint4-b128-asym";
 /** Cloudflare Workers static assets cap one file at 25 MiB; stay under it. */
 export const CHUNK_BYTES = 24 * 1024 * 1024;
 /** Where the build writes the bundle (relative to the repo root) and where the page serves it. */
@@ -35,7 +39,7 @@ export interface ManifestGz {
 }
 
 export interface ManifestFile {
-  /** Logical name, e.g. "model_int8.onnx". */
+  /** Logical name, e.g. "model_e4.onnx". */
   name: string;
   bytes: number;
   sha256: string;

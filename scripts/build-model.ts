@@ -1,8 +1,9 @@
 // Build the in-browser GLiNER2.5-small bundle into public/model/ (gitignored).
 //
 //   1. download the fp32 ONNX graph + tokenizer from Hugging Face at a pinned revision
-//   2. quantise the graph to int8 (onnxruntime dynamic quantisation, uv venv)
-//   3. split the int8 graph and the onnxruntime-web wasm binaries into <= 24 MiB chunks
+//   2. quantise the graph with scripts/quantize-e4.py (uv venv): int8 matrices plus a 4-bit
+//      embedding table, 51.6 MB; the output sha256 is pinned and the build fails if it drifts
+//   3. split the quantised graph and the onnxruntime-web wasm binaries into <= 24 MiB chunks
 //   4. gzip -9 each model chunk to <chunk>.gz (Cloudflare sends .bin uncompressed; .json and
 //      .wasm already get zstd on the wire, so they stay as they are)
 //   5. write public/model/manifest.json with the sha256 and bytes of every file and chunk, plus
@@ -24,7 +25,11 @@ const OUT = join(ROOT, MODEL_DIR);
 const VENV = join(CACHE, "venv");
 const PY = join(VENV, "bin", "python");
 const FORCE = process.env.FORCE === "1";
-const PY_DEPS = ["onnxruntime==1.30.0", "onnx==1.23.0"];
+// quantize-e4.py needs exactly these (onnxruntime's MatMulNBitsQuantizer imports onnx-ir for the uint4 Gather).
+const PY_DEPS = ["onnxruntime==1.30.0", "onnx==1.23.0", "onnx-ir==1.0.0"];
+/** Output of scripts/quantize-e4.py on the pinned fp32 graph (51,612,079 bytes, reproducible). */
+const QUANT_FILE = "model_e4.onnx";
+const QUANT_SHA256 = "e2ba72ffcf0aef5f5ccbc84f577496e601c9d04cb1864d4a597c406bf294ea31";
 
 // Source files at MODEL_REVISION, with their sha256 (the ONNX one is the Hugging Face LFS oid).
 const SOURCES = {
@@ -78,31 +83,35 @@ function run(cmd: string[]) {
 function ensureVenv() {
   const want = PY_DEPS.map((d) => d.split("==")[1]).join(" ");
   if (existsSync(PY)) {
-    const probe = Bun.spawnSync([PY, "-c", "import onnxruntime, onnx; print(onnxruntime.__version__, onnx.__version__)"]);
+    const probe = Bun.spawnSync([PY, "-c",
+      "import onnxruntime, onnx, onnx_ir; print(onnxruntime.__version__, onnx.__version__, onnx_ir.__version__)"]);
     if (probe.exitCode === 0 && probe.stdout.toString().trim() === want) return;
+  } else {
+    log("create uv venv", VENV);
+    run(["uv", "venv", "--quiet", "--python", "3.12", VENV]);
   }
-  log("create uv venv", VENV);
-  run(["uv", "venv", "--quiet", "--python", "3.12", VENV]);
+  log("install", PY_DEPS.join(" "));
   run(["uv", "pip", "install", "--quiet", "--python", PY, ...PY_DEPS]);
 }
 
 async function quantise(fp32: string): Promise<string> {
-  const dest = join(CACHE, "int8", MODEL_REVISION, "model_int8.onnx");
-  const stampPath = `${dest}.stamp.json`;
-  const srcSha = SOURCES["onnx/model.onnx"];
-  if (!FORCE && existsSync(dest) && existsSync(stampPath)) {
-    const stamp = JSON.parse(readFileSync(stampPath, "utf8"));
-    if (stamp.src === srcSha && stamp.quant === QUANT_ID && (await sha256File(dest)) === stamp.out) {
-      log(`have model_int8.onnx (${mb(statSync(dest).size)})`);
-      return dest;
-    }
+  const dest = join(CACHE, "e4", MODEL_REVISION, QUANT_FILE);
+  if (!FORCE && existsSync(dest) && (await sha256File(dest)) === QUANT_SHA256) {
+    log(`have ${QUANT_FILE} (${mb(statSync(dest).size)})`);
+    return dest;
   }
   ensureVenv();
   mkdirSync(join(dest, ".."), { recursive: true });
-  log("quantise to int8");
-  run([PY, join(ROOT, "scripts", "quantize-int8.py"), fp32, dest]);
-  writeFileSync(stampPath, JSON.stringify({ src: srcSha, quant: QUANT_ID, out: await sha256File(dest) }, null, 2) + "\n");
-  log(`  model_int8.onnx ${mb(statSync(dest).size)}`);
+  log(`quantise (${QUANT_ID})`);
+  const tmp = `${dest}.part`;
+  run([PY, join(ROOT, "scripts", "quantize-e4.py"), fp32, tmp]);
+  const got = await sha256File(tmp);
+  if (got !== QUANT_SHA256) {
+    throw new Error(`sha256 mismatch for ${QUANT_FILE}: got ${got}, want ${QUANT_SHA256} ` +
+      `(check the venv pins: ${PY_DEPS.join(" ")}); the output stays at ${tmp}`);
+  }
+  renameSync(tmp, dest);
+  log(`  ${QUANT_FILE} ${mb(statSync(dest).size)}`);
   return dest;
 }
 
@@ -163,7 +172,7 @@ async function main() {
     await download("tokenizer.json"),
     await download("tokenizer_config.json"),
   ];
-  const int8 = await quantise(fp32);
+  const quant = await quantise(fp32);
 
   const ortVersion = JSON.parse(readFileSync(join(ORT_PKG, "package.json"), "utf8")).version as string;
   const ortFile = (f: string) => {
@@ -182,7 +191,7 @@ async function main() {
     ort: ortVersion,
     chunkBytes: CHUNK_BYTES,
     files: {
-      model: writeChunks("model_int8.onnx", readFileSync(int8), ".bin", written, gzPrev),
+      model: writeChunks(QUANT_FILE, readFileSync(quant), ".bin", written, gzPrev),
       tokenizer: writeChunks("tokenizer.json", readFileSync(tokenizer), ".json", written),
       tokenizerConfig: writeChunks("tokenizer_config.json", readFileSync(tokenizerConfig), ".json", written),
       ortWasm: writeChunks(ORT_WASM, ortFile(ORT_WASM), ".wasm", written),

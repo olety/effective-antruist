@@ -6,7 +6,7 @@ Effective Antruist is a one-page parody of moral maths. You paste a bio or what 
 
 ## How it works
 
-- Spans: GLiNER2.5 small runs in your browser (int8 ONNX on WebAssembly) and finds the food, pets, money, jobs and sins in your text.
+- Spans: GLiNER2.5 small runs in your browser (a 52 MB ONNX model on WebAssembly: int8 matrices with a 4-bit embedding table) and finds the food, pets, money, jobs and sins in your text.
 - Verdicts: Jev, a typed decision model, answers five questions about the text: caste, moral circle, Skittles for shrimp, doomer, eats meat.
 - Price: a deterministic engine turns each line into insects. Default weights are Rethink Priorities' 2023 welfare-range medians (1 human = 76.92 insects); you can switch to their 2025 moral-parliament means or to neuron counts.
 - Sources: every number is cited in SOURCES.md in the repo. The spark is Bentham's Bulldog's article "Insects Matter More Than People in the Aggregate".

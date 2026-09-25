@@ -15,7 +15,7 @@ Built for Hackyard Yard #3, "One Screen": one view, no routes, solo, open source
 ```
  your bio ──► GLiNER2.5-small ──► spans ──► rules + lexicon ──┐
              (in your browser,   food, pets, donations,       │
-              int8 ONNX, WASM)   employers, AI labs, ...      ▼
+              int8/4-bit ONNX)   employers, AI labs, ...      ▼
                                                       Worker /api/judge
                                    Jev (typed questions) ◄────┤
                                    caste · moral circle ·     │
@@ -27,7 +27,7 @@ Built for Hackyard Yard #3, "One Screen": one view, no routes, solo, open source
                                        "HELLO my worth is 17,885,774 INSECTS"
 ```
 
-1. **Spans.** GLiNER2.5-small runs in your browser as an 89 MB int8 ONNX model on onnxruntime-web (WASM, 4 threads when the page is cross-origin isolated). It downloads once and stays in Cache Storage. Engine rules and a lexicon clean its spans: AI labs come from a closed list, merged charities are split, a pet must contain an animal. Phones and data-saver connections skip the model and use the lexicon.
+1. **Spans.** GLiNER2.5-small runs in your browser on onnxruntime-web (WASM, 4 threads when the page is cross-origin isolated). The ONNX model has int8 matrices with a 4-bit embedding table: about 52 MB, and about 40 MB over the wire as gzip. It downloads once and stays in Cache Storage. Engine rules and a lexicon clean its spans: AI labs come from a closed list, merged charities are split, a pet must contain an animal. Phones and data-saver connections skip the model and use the lexicon.
 2. **Verdicts.** The Worker asks Jev, TypeSafe's typed decision model, five questions about the text. Answers are cached per text, so the same bio always gets the same verdict. When Jev is unsure (0.2 to 0.8), the soldiers argue.
 3. **Price.** A deterministic engine turns each span into a ledger line priced in insects. The default weights are Rethink Priorities' 2023 welfare-range medians (1 human = 76.92 insects). You can switch to the 2025 moral-parliament means or to neuron counts. The Skittles line is hypothetical and stays out of the total.
 
