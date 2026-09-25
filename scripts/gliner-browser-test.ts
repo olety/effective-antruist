@@ -1,12 +1,14 @@
-// Headless Chrome check of in-browser GLiNER: the default WASM backend, then the opt-in WebGPU
-// backend, each in a fresh profile, each visited twice (the second visit must load from Cache
-// Storage with no /model/ requests). WASM must find the key spans the Python service finds;
-// WebGPU only has to run (onnxruntime-web 1.30 corrupts its pair reranker; see src/gliner/index.ts).
+// Headless Chrome check of in-browser GLiNER: the default WASM backend cross-origin isolated
+// (COOP/COEP, so WASM threads), WASM without isolation (1 thread), then the opt-in WebGPU backend,
+// each in a fresh profile, each visited twice (the second visit must load from Cache Storage with
+// no /model/ requests). WASM must find the key spans (after the span rules) and keep every offset
+// exact; WebGPU only has to run (onnxruntime-web 1.30 corrupts its pair reranker; see src/gliner/index.ts).
 // Usage: bun run model && bun run test:gliner      (GLINER_TEST_URL=... to use a running server)
-import { spawn, type Subprocess } from "bun";
 import { chromium, type Request } from "playwright-core";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createServer, type Plugin, type ViteDevServer } from "vite";
 import { EXAMPLES } from "../src/examples";
+import { EXTRA_TEXTS } from "../src/gliner/test-texts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const PORT = 5199;
@@ -15,28 +17,64 @@ const SERVICE = "http://127.0.0.1:8765";
 
 async function up(url: string) {
   try {
-    return (await fetch(url, { signal: AbortSignal.timeout(1000) })).ok;
+    // connection: close, so no keep-alive socket holds vite.close() open
+    return (await fetch(url, { headers: { connection: "close" }, signal: AbortSignal.timeout(1000) })).ok;
   } catch {
     return false;
   }
 }
 
-let vite: Subprocess | null = null;
+// COOP/COEP on every document unless its URL says coi=0 (what public/_headers does in production).
+function crossOriginIsolation(): Plugin {
+  return {
+    name: "test-coi",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url?.includes("coi=0")) {
+          // Keep vite.config.ts's own isolation headers off this document too.
+          const set = res.setHeader.bind(res);
+          res.setHeader = ((k: string, v: number | string | readonly string[]) =>
+            /^cross-origin-(opener|embedder)-policy$/i.test(k) ? res : set(k, v)) as typeof res.setHeader;
+        } else {
+          res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+          res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+        }
+        next();
+      });
+    },
+  };
+}
+
+let vite: ViteDevServer | null = null;
 if (!process.env.GLINER_TEST_URL) {
-  vite = spawn(["bunx", "vite", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"], {
-    cwd: ROOT, stdout: "ignore", stderr: "inherit",
+  vite = await createServer({
+    root: ROOT,
+    configFile: `${ROOT}vite.config.ts`,
+    logLevel: "warn",
+    plugins: [crossOriginIsolation()],
+    server: { port: PORT, strictPort: true, host: "127.0.0.1" },
   });
+  await vite.listen();
   for (let i = 0; i < 60 && !(await up(`${BASE}/gliner-test.html`)); i++) await Bun.sleep(500);
 }
 
 const fmt = (spans: { label: string; text: string; score: number; source: string }[]) =>
   spans.map((s) => `${s.label}:${s.text}${s.source === "regex" ? "(re)" : `(${s.score})`}`).join("  ");
 
-// Spans the WASM backend must find (the Python service finds them too).
+// Spans the WASM backend must find (the Python service finds them too), and spans it must not print.
 const MUST: Record<string, string[]> = {
-  A: ["job:Staff engineer", "ai_lab:Google Brain", "donation:10%", "food:Vegan", "hobby:ultramarathons", "city:SF", "pet:two cats"],
+  A: ["job:Staff engineer", "ai_lab:Anthropic", "ai_lab:Google Brain", "donation:10%", "charity:GiveWell",
+    "charity:Shrimp Welfare Project", "food:Vegan", "hobby:ultramarathons", "city:SF", "pet:two cats"],
   B: ["job:indie hacker", "city:Lisbon", "money:$4k MRR", "food:steak", "pet:3 dogs"],
-  C: ["food:chicken sandwich", "donation:$20", "employer:fintech startup", "city:Tokyo"],
+  C: ["food:chicken sandwich", "donation:$20", "charity:homeless shelter", "employer:fintech startup", "city:Tokyo"],
+  polycule: ["charity:GiveWell", "city:Berkeley"],
+  emoji_ja: ["donation:$5", "charity:Red Cross", "city:Kyoto"],
+  bio600: ["ai_lab:OpenAI", "ai_lab:DeepMind", "charity:Against Malaria Foundation", "charity:GiveDirectly", "charity:food bank"],
+};
+const MUST_NOT: Record<string, RegExp> = {
+  A: /^charity:GiveWell and/,
+  pigeons: /^food:.*pigeon/i,
+  polycule: /^(pet|animal):.*polycule/i,
 };
 const keyOf = (s: { label: string; text: string }) => `${s.label}:${s.text}`;
 const wasmSpans: Record<string, string[]> = {};
@@ -53,13 +91,13 @@ const browser = await chromium.launch({
   args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU"],
 });
 try {
-  for (const mode of ["wasm", "webgpu"] as const) {
+  for (const mode of ["wasm", "wasm-1t", "webgpu"] as const) {
     const ctx = await browser.newContext();
     const modelRequests: string[] = [];
     ctx.on("request", (r: Request) => {
       if (new URL(r.url()).pathname.startsWith("/model/")) modelRequests.push(r.url());
     });
-    for (const visit of [1, 2]) {
+    for (const visit of mode === "wasm-1t" ? [1] : [1, 2]) {
       modelRequests.length = 0;
       const page = await ctx.newPage();
       page.on("pageerror", (e) => console.log("[pageerror]", e.message));
@@ -70,7 +108,8 @@ try {
         if (m.type() === "error" || m.type() === "warning") console.log(`[console.${m.type()}]`, m.text().slice(0, 300));
       });
       const t0 = Date.now();
-      await page.goto(`${BASE}/gliner-test.html?auto=1${mode === "webgpu" ? "&ep=webgpu" : ""}`);
+      const qs = `auto=1&extra=1&raw=1${mode === "webgpu" ? "&ep=webgpu" : ""}${mode === "wasm-1t" ? "&coi=0" : ""}`;
+      await page.goto(`${BASE}/gliner-test.html?${qs}`);
       await page.waitForFunction(() => (window as any).__glinerTest?.done, null, { timeout: 300_000, polling: 100 });
       const wallMs = Date.now() - t0;
       const st = await page.evaluate(() => (window as any).__glinerTest);
@@ -84,38 +123,47 @@ try {
       }
       const i = st.info;
       console.log(`  backend ${i.backend}${i.note ? ` (${i.note})` : ""}, fromCache ${i.fromCache}, ` +
-        `${(i.bytes / 1e6).toFixed(1)} MB, download ${i.downloadMs} ms, compile+warm-up ${i.compileMs} ms, load total ${i.totalMs} ms`);
-      for (const r of st.runs) console.log(`  ${r.id}: infer ${r.inferMs} ms, round trip ${r.roundTripMs} ms\n     ${fmt(r.spans)}`);
+        `${(i.bytes / 1e6).toFixed(1)} MB, download ${i.downloadMs} ms, compile+warm-up ${i.compileMs} ms, load total ${i.totalMs} ms, ` +
+        `threads ${i.threads} (crossOriginIsolated ${st.crossOriginIsolated})`);
+      for (const r of st.runs) console.log(`  ${r.id} (${r.chars} ch): infer ${r.inferMs} ms, round trip ${r.roundTripMs} ms\n     ${fmt(r.spans)}`);
       if (mode === "webgpu" && i.backend !== "webgpu") fail(`expected webgpu, got ${i.backend}`);
-      if (mode === "wasm" && i.backend !== "wasm") fail(`expected wasm, got ${i.backend}`);
+      if (mode !== "webgpu" && i.backend !== "wasm") fail(`expected wasm, got ${i.backend}`);
+      if (mode === "wasm" && !(i.threads > 1)) fail(`isolated page ran ${i.threads} thread(s)`);
+      if (mode === "wasm-1t" && i.threads !== 1) fail(`non-isolated page ran ${i.threads} threads`);
       for (const r of st.runs) {
         const got: string[] = r.spans.map(keyOf);
         if (!r.spans.some((s: any) => s.source === "gliner")) fail(`${r.id}: no model spans`);
-        if (mode === "wasm") {
-          wasmSpans[r.id] = got;
+        if (!r.offsetsOk) fail(`${r.id}: a span's offsets do not slice to its text`);
+        if (mode !== "webgpu") {
+          wasmSpans[r.id] ??= got;
           const missing = (MUST[r.id] ?? []).filter((k) => !got.includes(k));
-          if (missing.length) fail(`${r.id}: missing ${missing.join(", ")}`);
+          if (missing.length) fail(`${r.id} (${mode}): missing ${missing.join(", ")}`);
+          const bad = got.filter((k) => MUST_NOT[r.id]?.test(k));
+          if (bad.length) fail(`${r.id} (${mode}): must not print ${bad.join(", ")}`);
         } else if (visit === 1 && wasmSpans[r.id]) {
           const lost = wasmSpans[r.id].filter((k) => !got.includes(k));
           const extra = got.filter((k) => !wasmSpans[r.id].includes(k));
           if (lost.length || extra.length) console.log(`  KNOWN ISSUE ${r.id} webgpu vs wasm: lost [${lost.join(", ")}] extra [${extra.join(", ")}]`);
         }
       }
-      if (st.runs.length !== EXAMPLES.length) fail(`ran ${st.runs.length} examples`);
+      if (st.runs.length !== EXAMPLES.length + EXTRA_TEXTS.length) fail(`ran ${st.runs.length} texts`);
       if (visit === 2 && (!i.fromCache || modelRequests.length)) fail(`repeat visit hit the network (${modelRequests.length} /model/ requests)`);
     }
     await ctx.close();
   }
 } finally {
   await browser.close();
-  vite?.kill();
+  (vite?.httpServer as { closeAllConnections?: () => void } | null)?.closeAllConnections?.();
+  await vite?.close();
 }
 
 // Side by side with the Python service (base model) when it is up.
 if (await up(`${SERVICE}/health`)) {
   console.log(`\n== Python service ${SERVICE} (reference)`);
   for (const ex of EXAMPLES) {
-    const r = await (await fetch(`${SERVICE}/extract`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: ex.text }) })).json() as any;
+    const r = await (await fetch(`${SERVICE}/extract`, {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: ex.text }), signal: AbortSignal.timeout(10_000),
+    })).json() as any;
     console.log(`  ${ex.id}: ${r.entities.map((e: any) => `${e.kind}:${e.text}${e.source === "regex" ? "(re)" : `(${e.confidence})`}`).join("  ")}`);
   }
 }

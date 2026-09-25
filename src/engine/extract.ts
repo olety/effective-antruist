@@ -10,6 +10,7 @@ export const LEXICON: Record<Exclude<SpanKind, "donation" | "money" | "pet">, st
     "Anthropic", "OpenAI", "Google DeepMind", "DeepMind", "Google Brain", "Meta AI", "FAIR", "xAI", "Mistral",
     "Cohere", "Inflection", "Character.AI", "Hugging Face", "Stability AI", "Safe Superintelligence", "SSI",
     "Thinking Machines", "MIRI", "Redwood Research", "Apollo Research", "METR", "Conjecture", "Reflection AI",
+    "Mistral AI", "Epoch AI", "AI Safety Institute", "AI Security Institute", "Thinking Machines Lab", "Meta FAIR",
   ],
   charity: [
     "Shrimp Welfare Project", "GiveWell", "Against Malaria Foundation", "AMF", "GiveDirectly", "Malaria Consortium",
@@ -44,9 +45,31 @@ export const LEXICON: Record<Exclude<SpanKind, "donation" | "money" | "pet">, st
   ],
 };
 
-const PET_WORDS = "cats?|dogs?|kittens?|puppies|puppy|hamsters?|rabbits?|parrots?|goldfish|ferrets?";
+const PET_WORDS =
+  "cats?|dogs?|kittens?|puppies|puppy|hamsters?|rabbits?|parrots?|goldfish|ferrets?|rats?|mice|birds?|budgies?|" +
+  "cockatiels?|guinea pigs?|tortoises?|turtles?|lizards?|geckos?|snakes?|chinchillas?|gerbils?|hedgehogs?|axolotls?";
+
+/** Animal nouns: a model pet/animal span must contain one (bench rule R3; "my polycule of four" is not four cats). */
+const ANIMAL_NOUNS = [
+  "cats?", "kittens?", "kitty", "dogs?", "pupp(?:y|ies)", "pups?", "hamsters?", "rabbits?", "bunn(?:y|ies)", "parrots?",
+  "cockatiels?", "budgies?", "canar(?:y|ies)", "goldfish", "fish(?:es)?", "ferrets?", "hedgehogs?", "guinea pigs?",
+  "tortoises?", "turtles?", "lizards?", "geckos?", "bearded dragons?", "snakes?", "pythons?", "rattlesnakes?", "tarantulas?",
+  "spiders?", "axolotls?", "horses?", "ponies", "pony", "donkeys?", "goats?", "sheep", "lambs?", "cows?", "cattle", "pigs?",
+  "hens?", "chickens?", "ducks?", "geese", "goose", "bees?", "hives?", "ants?", "insects?", "bugs?", "beetles?", "crickets?",
+  "mosquito(?:es)?", "flies", "shrimps?", "prawns?", "crabs?", "lobsters?", "octop(?:us|i|uses)", "squid", "salmon", "trout",
+  "walleye", "whales?", "dolphins?", "seals?", "seagulls?", "gulls?", "pigeons?", "birds?", "budgies?", "deer", "elks?",
+  "penguins?", "falcons?", "owls?", "rats?", "mice", "mouse", "corgis?", "retrievers?", "labradors?", "labs?", "beagles?",
+  "dachshunds?", "greyhounds?", "lurchers?", "spaniels?", "pugs?", "pit ?bulls?", "bulldogs?", "terriers?", "jack russells?",
+  "shiba(?: inu)?", "husk(?:y|ies)", "poodles?", "labradoodles?", "xolos?", "collies?", "shepherds?", "bengals?",
+  "tabb(?:y|ies)", "african grey", "chinchillas?", "gerbils?", "frogs?", "toads?", "animals?", "pets?", "livestock", "sky rats",
+].join("|");
+export const ANIMAL_NOUN_RE = new RegExp(`\\b(?:${ANIMAL_NOUNS})\\b`, "i");
+/** Text just before a pet's name: "a parrot named ", "my corgi, ". */
+export const PET_NAME_BEFORE_RE = new RegExp(`(?:named|called|\\b(?:${ANIMAL_NOUNS}))[\\s,]+$`, "i");
 const NUM_WORDS = "a|an|one|two|three|four|five|six|seven|eight|nine|ten|\\d+|my|our";
 const PET_RE = new RegExp(`\\b(?:(?:${NUM_WORDS})\\s+)(?:\\w+\\s+)?(?:${PET_WORDS})\\b`, "gi");
+/** A whole span that reads as kept pets: "3 dogs", "my two cats", "cats". */
+export const PET_PHRASE_RE = new RegExp(`^(?:(?:${NUM_WORDS})\\s+){0,2}(?:\\w+\\s+)?(?:${PET_WORDS})$`, "i");
 export const MONEY_RE = /(?:[$£€¥]\s?\d[\d,]*(?:\.\d+)?(?:\s?[kKmM]\b)?(?:\s?(?:MRR|ARR)\b)?|\b\d+(?:\.\d+)?\s?%)/g;
 const GIVE_RE = /\b(give|gives|gave|giving|donat\w*|pledg\w*|tith\w*|contribut\w*)\b/i;
 

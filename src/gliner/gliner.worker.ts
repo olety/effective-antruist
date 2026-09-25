@@ -2,7 +2,9 @@
 import { Tokenizer } from "@huggingface/tokenizers";
 import { GlinerBoundaryRuntime } from "./vendor/gliner-boundary.mjs";
 import { clearBundleCache, loadBundle } from "./assets";
-import { DESCRIPTIONS, LABEL_NAMES, MAX_CHARS, THRESHOLD, WARMUP_TEXT, toSpans } from "./labels";
+import { extractChunked } from "./chunks";
+import { DESCRIPTIONS, LABEL_NAMES, MAX_CHARS, RAW_THRESHOLD, THRESHOLD, WARMUP_TEXT } from "./labels";
+import { finishSpans } from "./rules";
 import { keysFor, type Backend } from "./model-info";
 import type { FromWorker, GlinerLoadInfo, GlinerResult, ToWorker } from "./protocol";
 
@@ -19,6 +21,7 @@ const post = (msg: FromWorker) => scope.postMessage(msg);
 type Gpu = { requestAdapter(): Promise<unknown | null> };
 
 let runtime: GlinerBoundaryRuntime | null = null;
+let threads = 1;
 let loading: Promise<GlinerLoadInfo> | null = null;
 
 /** Null when WebGPU is usable, else why not. */
@@ -68,8 +71,9 @@ async function load(baseUrl: string, want: Backend): Promise<GlinerLoadInfo> {
   const t1 = performance.now();
   ort.env.logLevel = "error";
   ort.env.wasm.wasmBinary = ortBinary;
-  // Threads need cross-origin isolation (COOP/COEP); without it ORT would warn and use 1.
-  ort.env.wasm.numThreads = scope.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 1) : 1;
+  // Threads need cross-origin isolation (COOP/COEP headers); without it ORT would warn and use 1.
+  threads = scope.crossOriginIsolated ? Math.max(1, Math.min(4, navigator.hardwareConcurrency || 1)) : 1;
+  ort.env.wasm.numThreads = threads;
   const decode = (b: Uint8Array) => JSON.parse(new TextDecoder().decode(b));
   const tokenizer = new Tokenizer(decode(tokenizerJson), decode(tokenizerConfig));
 
@@ -96,17 +100,22 @@ async function load(baseUrl: string, want: Backend): Promise<GlinerLoadInfo> {
     downloadMs: Math.round(bundle.downloadMs),
     compileMs: Math.round(t2 - t1),
     totalMs: Math.round(t2 - t0),
+    threads,
     note,
   };
 }
 
-async function extract(input: string): Promise<GlinerResult> {
-  if (!runtime) throw new Error("GLiNER not loaded");
+async function extract(input: string, wantRaw = false): Promise<GlinerResult> {
+  const rt = runtime;
+  if (!rt) throw new Error("GLiNER not loaded");
   const text = input.slice(0, MAX_CHARS);
   const t = performance.now();
-  const raw = text.trim() ? await runtime.extract(text, LABEL_NAMES, { threshold: THRESHOLD, descriptions: DESCRIPTIONS }) : [];
-  const spans = toSpans(raw, text);
-  return { spans, inferMs: Math.round((performance.now() - t) * 10) / 10 };
+  // One run per sentence chunk (<= 200 chars, <= 6 chunks); offsets come back into `text`.
+  const raw = await extractChunked(text, (chunk) =>
+    rt.extract(chunk, LABEL_NAMES, { threshold: RAW_THRESHOLD, descriptions: DESCRIPTIONS }),
+  );
+  const spans = finishSpans(raw, text);
+  return { spans, inferMs: Math.round((performance.now() - t) * 10) / 10, ...(wantRaw ? { raw } : {}) };
 }
 
 // Runs are serialised: one ORT session must not run two batches at once.
@@ -124,7 +133,7 @@ scope.onmessage = (e) => {
       },
     );
   } else if (msg.type === "extract") {
-    const run = queue.then(() => extract(msg.text));
+    const run = queue.then(() => extract(msg.text, msg.raw));
     queue = run.catch(() => undefined);
     run.then(
       (result) => post({ type: "result", id: msg.id, result }),

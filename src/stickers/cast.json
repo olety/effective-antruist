@@ -1,0 +1,198 @@
+[
+ {
+  "id": "w_troll_1",
+  "family": "trollface",
+  "gender": "none",
+  "mood": "smug",
+  "note": "Trollface in the purple room: headphones, synths, rifle. Head-bob frame 1 (opaque, 1200 px)."
+ },
+ {
+  "id": "w_troll_2",
+  "family": "trollface",
+  "gender": "none",
+  "mood": "smug",
+  "note": "Head-bob frame 2 of the purple room (opaque)."
+ },
+ {
+  "id": "w_soldierA",
+  "family": "wojak",
+  "gender": "m",
+  "mood": "excited",
+  "note": "bZ-badge soldier who shouts SAVE THE SHRIMPS!; mouth-open frame."
+ },
+ {
+  "id": "w_soldierB",
+  "family": "wojak",
+  "gender": "m",
+  "mood": "excited",
+  "note": "Bug-badge soldier who shouts BUG LIVES MATTER!; mouth-open frame."
+ },
+ {
+  "id": "w_bug_shrimp",
+  "family": "insect",
+  "gender": "none",
+  "mood": null,
+  "note": "Shrimp (crustacean, filed with the insects for the ledger)."
+ },
+ {
+  "id": "w_bug_bsf",
+  "family": "insect",
+  "gender": "none",
+  "mood": null,
+  "note": "Black soldier fly."
+ },
+ {
+  "id": "w_bug_mealworm",
+  "family": "insect",
+  "gender": "none",
+  "mood": null,
+  "note": "Mealworm."
+ },
+ {
+  "id": "w_bug_ant",
+  "family": "insect",
+  "gender": "none",
+  "mood": null,
+  "note": "Ant."
+ },
+ {
+  "id": "w_bug_bee",
+  "family": "insect",
+  "gender": "none",
+  "mood": null,
+  "note": "Bee."
+ },
+ {
+  "id": "w_soy_crying",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "crying",
+  "note": "Ant lost in the render; soy_crying_ant is the version with the ant."
+ },
+ {
+  "id": "w_soy_gaping",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "excited",
+  "note": "Max-gape close-up; shoulders open at the bottom."
+ },
+ {
+  "id": "w_soy_shrimphug",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "delighted",
+  "note": "Soyjak hugging a big shrimp, hearts."
+ },
+ {
+  "id": "w_soy_smug_calc",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "smug",
+  "note": "Calculator reads 10^50. KNOWN FLAW: see-through shoulders."
+ },
+ {
+  "id": "w_soy_crying_soldier",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "crying",
+  "note": "Crying saluting soldier soyjak. KNOWN FLAW: white wedge under the salute."
+ },
+ {
+  "id": "w_soy_ewhore",
+  "family": "ewhore",
+  "gender": "f",
+  "mood": "excited",
+  "note": "Detailed-style e-whore beckoning (older, less canonical than ewhore_delighted)."
+ },
+ {
+  "id": "w_soy_doomer_otaku",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "excited",
+  "note": "Fedora otaku pointing at the viewer (the AI-GOD-will-factory-farm-you line)."
+ },
+ {
+  "id": "w_sjette_pointing",
+  "family": "soyjakette",
+  "gender": "f",
+  "mood": "excited",
+  "note": "Soyjakette pointing right. Torso is cropped flat by the canvas on the left and bottom: anchor it to the bottom-left corner."
+ },
+ {
+  "id": "w_sjette_pointing_pair",
+  "family": "soyjakette",
+  "gender": "f",
+  "mood": "excited",
+  "note": "Brunette + ginger soyjakettes pointing right, closed flat bottom line."
+ },
+ {
+  "id": "w_sjette_crying",
+  "family": "soyjakette",
+  "gender": "f",
+  "mood": "crying",
+  "note": "Mascara in two black rivers plus blue tears, fists up."
+ },
+ {
+  "id": "w_ewhore_delighted",
+  "family": "ewhore",
+  "gender": "f",
+  "mood": "delighted",
+  "note": "Front view, hands on cheeks, pink hair, heart shades pushed up, choker, fishnet sleeves."
+ },
+ {
+  "id": "w_ewhore_selfie",
+  "family": "ewhore",
+  "gender": "f",
+  "mood": "excited",
+  "note": "Selfie stick + phone, ring light behind (ring interior cut to transparent), peace sign."
+ },
+ {
+  "id": "w_polycule",
+  "family": "soyjak",
+  "gender": "group",
+  "mood": "excited",
+  "note": "Soyjak man, e-whore, soyjakette, soyjak man shoulder to shoulder, five hearts above."
+ },
+ {
+  "id": "w_doomer_girl",
+  "family": "wojak",
+  "gender": "f",
+  "mood": "sad",
+  "note": "Canonical doomer girl: black hair and bangs, black hoodie, tired eyes."
+ },
+ {
+  "id": "w_chad_yes",
+  "family": "chad",
+  "gender": "m",
+  "mood": "unbothered",
+  "note": "Nordic gamer Yes. chad in profile facing right; the word Yes. lives in HTML."
+ },
+ {
+  "id": "w_npc_wojak",
+  "family": "npc",
+  "gender": "m",
+  "mood": "unbothered",
+  "note": "Canonical grey NPC wojak, head and shoulders."
+ },
+ {
+  "id": "w_trollface_head",
+  "family": "trollface",
+  "gender": "none",
+  "mood": "smug",
+  "note": "Standalone trollface head for the background."
+ },
+ {
+  "id": "w_soy_crying_ant",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "crying",
+  "note": "Crying soyjak holding a clearly visible ant in cupped hands (retry of soy_crying)."
+ },
+ {
+  "id": "w_soy_pointing_pair",
+  "family": "soyjak",
+  "gender": "m",
+  "mood": "excited",
+  "note": "Clean re-render of the pointing pair with solid white bodies; replaces soy_pointing. Left torso cropped flat by the canvas edge."
+ }
+]

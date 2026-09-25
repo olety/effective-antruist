@@ -7,7 +7,8 @@
 //
 // The model runs in a Web Worker on the WASM (CPU) backend. Files come from /model/
 // (bun run model) and stay in Cache Storage, so a repeat visit needs no network.
-// Labels, threshold and the money rule match service/app.py. If loadGliner() rejects
+// Labels and the money rule match service/app.py; per-kind thresholds, chunking and the span
+// rules (src/gliner/rules.ts, re-run by the Worker) fit the small model. If loadGliner() rejects
 // (old browser, blocked storage), POST without `spans` and the server extracts instead.
 //
 // Why WASM by default: on onnxruntime-web 1.30 the WebGPU EP computes start/end logits
@@ -99,10 +100,10 @@ export function loadGliner(opts: LoadOptions = {}): Promise<GlinerLoadInfo> {
   return loadPromise;
 }
 
-/** Spans for `text` (first 1500 chars), with timing. Loads the model first if needed. */
-export async function extractTimed(text: string): Promise<GlinerResult> {
+/** Spans for `text` (first 1500 chars), with timing. Loads the model first if needed. `raw: true` adds the model's entities (debug). */
+export async function extractTimed(text: string, opts: { raw?: boolean } = {}): Promise<GlinerResult> {
   await loadGliner();
-  return call<GlinerResult>({ type: "extract", text });
+  return call<GlinerResult>({ type: "extract", text, raw: opts.raw });
 }
 
 /** Spans for `text` (first 1500 chars). Loads the model first if needed. */

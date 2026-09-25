@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { SITE, SOUND } from "./src/copy.ts";
 
 // src/gliner hands onnxruntime-web its wasm binary as bytes (from the chunked, cached /model/
 // bundle), so the bundles' `new URL("ort-wasm-*.wasm", import.meta.url)` fallback is never used.
@@ -17,12 +18,34 @@ function ortNoWasmAssets(): Plugin {
   };
 }
 
-// `bun run dev` = Vite with HMR, proxying /api to `wrangler dev` on :8787.
+// index.html carries %SITE_key% / %SOUND_key% slots; src/copy.ts is the only copy table.
+function copySlots(): Plugin {
+  const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  const tables: Record<string, Record<string, unknown>> = { SITE, SOUND };
+  return {
+    name: "copy-slots",
+    transformIndexHtml(html) {
+      return html.replace(/%(SITE|SOUND)_(\w+)%/g, (m, t: string, k: string) => {
+        const v = tables[t][k];
+        if (typeof v !== "string") throw new Error(`index.html: no string ${t}.${k} in src/copy.ts`);
+        return esc(v).replace(/\n/g, "&#10;");
+      });
+    },
+  };
+}
+
+// `bun run dev` = Vite with HMR, proxying /api to `wrangler dev` on :8787 (API=http://127.0.0.1:<port> overrides).
 // gliner-test.html is dev-only: `vite` serves it at /gliner-test.html; the build ships index.html only.
+const api = process.env.API ?? "http://127.0.0.1:8787";
+// Cross-origin isolation for WASM threads in dev, matching public/_headers in production.
+const isolation = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "credentialless" };
+
 export default defineConfig({
-  plugins: [ortNoWasmAssets()],
-  server: { proxy: { "/api": "http://127.0.0.1:8787" } },
-  build: { outDir: "dist", emptyOutDir: true },
+  plugins: [ortNoWasmAssets(), copySlots()],
+  server: { proxy: { "/api": api }, headers: isolation },
+  preview: { proxy: { "/api": api }, headers: isolation },
+  // assetsInlineLimit 0: stickers, fonts and sounds stay separate files, out of the entry chunk.
+  build: { outDir: "dist", emptyOutDir: true, assetsInlineLimit: 0 },
   // The GLiNER worker (src/gliner) imports onnxruntime-web; module workers need ES output.
   worker: { format: "es", plugins: () => [ortNoWasmAssets()] },
   // onnxruntime-web ships prebuilt bundles; pre-bundling them breaks their wasm loader.

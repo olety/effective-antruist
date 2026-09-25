@@ -1,5 +1,5 @@
 // Messages between the page (index.ts) and the GLiNER Web Worker (gliner.worker.ts).
-import type { GlinerSpan } from "./labels";
+import type { GlinerSpan, RawEntity } from "./labels";
 import type { Backend } from "./model-info";
 
 export type GlinerPhase = "download" | "compile" | "ready";
@@ -21,19 +21,23 @@ export interface GlinerLoadInfo {
   /** Session creation plus the warm-up run (WebGPU shader compile happens here). */
   compileMs: number;
   totalMs: number;
+  /** WASM threads: min(4, cores) when the page is cross-origin isolated (COOP/COEP), else 1. */
+  threads: number;
   /** Why WebGPU was not used, when it was asked for and not used. */
   note: string | null;
 }
 
 export interface GlinerResult {
   spans: GlinerSpan[];
-  /** Model run plus post-processing, measured inside the worker. */
+  /** Model runs (one per sentence chunk) plus post-processing, measured inside the worker. */
   inferMs: number;
+  /** Model entities before thresholds and rules, only when asked for (extractTimed(text, { raw: true })). */
+  raw?: RawEntity[];
 }
 
 export type ToWorker =
   | { type: "load"; id: number; baseUrl: string; backend: Backend }
-  | { type: "extract"; id: number; text: string };
+  | { type: "extract"; id: number; text: string; raw?: boolean };
 
 export type FromWorker =
   | ({ type: "progress" } & GlinerProgress)

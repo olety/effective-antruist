@@ -1,5 +1,6 @@
 // Dev-only driver for gliner-test.html (not part of the main page or its build).
 import { EXAMPLES } from "../examples";
+import { EXTRA_TEXTS } from "./test-texts";
 import { extractTimed, loadGliner, type GlinerLoadInfo } from "./index";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -16,7 +17,7 @@ interface TestState {
   error: string | null;
   info: GlinerLoadInfo | null;
   pageToReadyMs: number | null;
-  runs: { id: string; roundTripMs: number; inferMs: number; spans: unknown[] }[];
+  runs: { id: string; chars: number; roundTripMs: number; inferMs: number; offsetsOk: boolean; spans: unknown[]; raw?: unknown[] }[];
 }
 const state: TestState = { done: false, error: null, info: null, pageToReadyMs: null, runs: [] };
 (window as unknown as { __glinerTest: TestState }).__glinerTest = state;
@@ -42,6 +43,7 @@ async function load(): Promise<GlinerLoadInfo> {
     },
   });
   state.info = info;
+  (state as TestState & { crossOriginIsolated: boolean }).crossOriginIsolated = self.crossOriginIsolated;
   state.pageToReadyMs ??= Math.round(performance.now());
   readout.textContent = `ready: ${info.backend}${info.fromCache ? " (from cache)" : ""}, ${info.totalMs} ms`;
   return info;
@@ -49,8 +51,9 @@ async function load(): Promise<GlinerLoadInfo> {
 
 async function run(id: string, t: string) {
   const t0 = performance.now();
-  const r = await extractTimed(t);
-  const row = { id, roundTripMs: Math.round(performance.now() - t0), inferMs: r.inferMs, spans: r.spans };
+  const r = await extractTimed(t, { raw: q.get("raw") === "1" });
+  const offsetsOk = r.spans.every((s) => t.slice(s.start, s.end) === s.text);
+  const row = { id, chars: t.length, roundTripMs: Math.round(performance.now() - t0), inferMs: r.inferMs, offsetsOk, spans: r.spans, raw: r.raw };
   state.runs.push(row);
   return row;
 }
@@ -68,6 +71,7 @@ async function all() {
   const info = await load();
   const results = [];
   for (const ex of EXAMPLES) results.push(await run(ex.id, ex.text));
+  if (q.get("extra") === "1") for (const ex of EXTRA_TEXTS) results.push(await run(ex.id, ex.text));
   show({ info, pageToReadyMs: state.pageToReadyMs, results });
 }
 $("all").onclick = () => all().catch((e) => show({ error: String(e) }));

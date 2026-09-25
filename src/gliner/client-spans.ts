@@ -2,7 +2,8 @@
 // worker/index.ts because a Worker entry module may only export handlers.
 import type { Span, SpanKind } from "../engine/types";
 
-export const MAX_CLIENT_SPANS = 300;
+/** A longer array is rejected (the server extracts instead); the browser caps its own output here. */
+export const MAX_CLIENT_SPANS = 60;
 
 const SPAN_KINDS: ReadonlySet<string> = new Set<SpanKind>([
   "food", "animal", "pet", "donation", "money", "employer", "ai_lab", "charity", "city", "hobby", "job",
@@ -15,8 +16,8 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
  * Spans sent by the browser -> engine spans, or null when the array is not well-formed
  * (then the caller extracts on the server). Accepts the src/gliner shape
  * {label, start, end, score, source} and the engine shape {kind, start, end, confidence}.
- * Offsets are clamped to `text` and the span text is re-read from it; unknown kinds and
- * empty spans are dropped.
+ * The span text is re-read from `text`; spans with offsets outside `text`, empty spans and
+ * unknown kinds are dropped (never clamped: a clamped span would highlight the wrong words).
  */
 export function parseClientSpans(raw: unknown, text: string): Span[] | null {
   if (!Array.isArray(raw) || raw.length > MAX_CLIENT_SPANS) return null;
@@ -28,16 +29,16 @@ export function parseClientSpans(raw: unknown, text: string): Span[] | null {
     const conf = r.confidence ?? r.score;
     if (typeof kind !== "string" || !isNum(r.start) || !isNum(r.end) || !isNum(conf)) return null;
     if (!SPAN_KINDS.has(kind)) continue;
-    const start = clamp(Math.trunc(r.start), 0, text.length);
-    const end = clamp(Math.trunc(r.end), 0, text.length);
-    if (end <= start) continue;
+    const start = Math.trunc(r.start);
+    const end = Math.trunc(r.end);
+    if (start < 0 || end > text.length || end <= start) continue;
     out.push({
       kind: kind as SpanKind,
       text: text.slice(start, end),
       start,
       end,
       confidence: clamp(conf, 0, 1),
-      source: r.source === "regex" ? "regex" : "gliner",
+      source: r.source === "regex" || r.source === "lexicon" ? r.source : "gliner",
     });
   }
   return out;

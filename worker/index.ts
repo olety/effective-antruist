@@ -1,10 +1,13 @@
 // Cloudflare Worker: POST /api/judge {text, source?, spans?} -> {spans, jev, ledger, totals, ...}.
 // Static assets serve the rest. `spans` comes from in-browser GLiNER (src/gliner); when it is
-// well-formed the server skips GLINER_URL, otherwise it extracts as before.
-import { callJev } from "../src/engine/jev";
+// well-formed the server skips GLINER_URL and re-runs the browser's thresholds and span rules on
+// it (so a stale client still prices right), otherwise it extracts as before. Jev answers are
+// memoised per SHA-256 of the cut text (worker/jev-memo.ts): every take of a text reads the same.
 import { fallbackExtract, MAX_CHARS } from "../src/engine/extract";
 import { judge } from "../src/engine/engine";
 import { parseClientSpans } from "../src/gliner/client-spans";
+import { applyRules, applyThresholds } from "../src/gliner/rules";
+import { memoJev } from "./jev-memo";
 import type { Span, WeightSourceId } from "../src/engine/types";
 
 export interface Env {
@@ -36,7 +39,7 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/api/judge") {
       if (req.method !== "POST") return json({ error: "POST only" }, 405);
@@ -52,12 +55,14 @@ export default {
         ? (body.source as WeightSourceId)
         : "rp2023";
       const t0 = Date.now();
-      const clientSpans = body.spans === undefined ? null : parseClientSpans(body.spans, text);
+      const parsed = body.spans === undefined ? null : parseClientSpans(body.spans, text);
+      const clientSpans = parsed && applyRules(text, applyThresholds(parsed));
       const rejected = body.spans !== undefined && !clientSpans;
       const extraction = clientSpans
         ? Promise.resolve({ spans: clientSpans, extractor: "gliner" as const, note: "spans from the browser" })
         : extractSpans(text, env).then((ex) => (rejected ? { ...ex, note: `browser spans rejected; ${ex.note ?? "server GLiNER"}` } : ex));
-      const [ex, jev] = await Promise.all([extraction, callJev(text, env.JEV_KEY)]);
+      const jevCall = memoJev(text, env.JEV_KEY, { origin: url.origin, waitUntil: ctx ? (p) => ctx.waitUntil(p) : undefined });
+      const [ex, jev] = await Promise.all([extraction, jevCall]);
       const j = judge({ text, spans: ex.spans, extractor: ex.extractor, jev, selected });
       return json({ ...j, truncated: body.text.length > MAX_CHARS, extractorNote: ex.note ?? null, ms: Date.now() - t0 });
     }
