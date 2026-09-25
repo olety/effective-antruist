@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hackyard Yard #3 — One Screen</title>
+  </head>
+  <body>
+    <main class="screen">
+      <section class="box door" aria-label="door">
+        <p class="ph">[DOOR placeholder]</p>
+        <div id="caste" class="caste"></div>
+      </section>
+
+      <section class="box input" aria-label="your text">
+        <label for="text" class="ph">[INPUT: paste a bio or what you did today]</label>
+        <textarea id="text" maxlength="1500" rows="6"></textarea>
+        <div class="row">
+          <span id="count">0 / 1500</span>
+          <span id="examples" class="examples"></span>
+        </div>
+        <button id="judge" type="button">judge me</button>
+        <div id="echo" class="echo" aria-live="polite"></div>
+      </section>
+
+      <section class="box soldiers" aria-label="soldiers">
+        <div class="box soldier" id="soldierA">
+          <p class="ph">[SOLDIER A placeholder]</p>
+          <div class="bubble" id="bubbleA">BUG LIVES MATTER!</div>
+          <div class="meta" id="metaA"></div>
+        </div>
+        <div class="box soldier" id="soldierB">
+          <p class="ph">[SOLDIER B placeholder]</p>
+          <div class="bubble" id="bubbleB">SAVE THE SHRIMPS!</div>
+          <div class="meta" id="metaB"></div>
+        </div>
+        <div id="argue" class="argue" hidden>[the soldiers argue]</div>
+      </section>
+
+      <section class="box room" aria-label="purple room: the result">
+        <p class="ph">[PURPLE ROOM placeholder: trollface, headphones, synths]</p>
+        <fieldset class="switch" id="switch">
+          <legend>moral-weight source</legend>
+        </fieldset>
+        <div class="total">
+          <div class="big" id="total">—</div>
+          <div class="small" id="totalNote">worth in insects</div>
+        </div>
+        <div class="aggregate" id="aggregate"></div>
+        <ol class="ledger" id="ledger"></ol>
+        <div class="status" id="status"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

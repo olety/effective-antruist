@@ -1,0 +1,21 @@
+{
+  "name": "hackyard-yard3",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "worker": "bun run build && wrangler dev --port 8787",
+    "gliner": "cd service && .venv/bin/python app.py",
+    "test": "bun test",
+    "smoke": "bun scripts/smoke.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260925.1",
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "wrangler": "^4.140.0"
+  }
+}
