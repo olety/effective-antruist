@@ -1,0 +1,173 @@
+<!doctype html>
+<!-- The link-preview card and the icons, drawn from the site's own parts (stickers, fonts, colours).
+     scripts/make-og.ts serves the repo and screenshots this page:
+       /scripts/og-card.html            1200x630 card  -> public/og.png
+       /scripts/og-card.html?icon=tile  full-bleed icon -> apple-touch-icon, manifest icons
+       /scripts/og-card.html?icon=badge red badge, transparent corners -> favicon.ico, favicon-32.png -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>og card</title>
+<style>
+  @font-face { font-family: "Meme"; src: local("Impact"), url("../src/fonts/anton-latin.woff2") format("woff2"); }
+  @font-face { font-family: "Marker"; src: url("../src/fonts/marker-subset.woff2") format("woff2"); }
+  :root {
+    --ink: #141116; --paper: #ffffff; --ground: #7d2fe0; --red: #e8202a; --hi: #ffe23d;
+    --meme: "Meme", Impact, Anton, "Arial Narrow", sans-serif;
+    --marker: "Marker", "Permanent Marker", "Marker Felt", cursive;
+    --body: Arial, "Helvetica Neue", Helvetica, sans-serif;
+    --rim: 0 0 0 6px var(--paper), 0 0 0 7px rgba(70, 60, 90, 0.3);
+    --lift: 0 20px 36px -10px rgba(24, 8, 44, 0.7), 0 5px 12px rgba(24, 8, 44, 0.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { width: 1200px; height: 630px; overflow: hidden; position: relative; background: var(--ground); font-family: var(--body); }
+
+  .wall { position: absolute; inset: -40px; }
+  .wall > * { position: absolute; filter: drop-shadow(0 5px 6px rgba(24, 8, 44, 0.42)); }
+  .ts {
+    font: 400 22px/1 var(--meme); letter-spacing: 0.01em; text-align: center;
+    padding: 8px 11px; border-radius: 12px; box-shadow: 0 0 0 5px var(--paper), 0 0 0 6px rgba(70, 60, 90, 0.28);
+    filter: none !important;
+  }
+  .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 46% 62% at 50% 46%, rgba(22, 6, 42, 0.66), rgba(22, 6, 42, 0.42) 55%, rgba(22, 6, 42, 0) 100%),
+      linear-gradient(rgba(22, 6, 42, 0.18), rgba(22, 6, 42, 0.18));
+  }
+
+  .caption {
+    position: absolute; left: 0; right: 0; top: 22px; margin: 0; text-align: center;
+    font: 400 104px/0.93 var(--meme); letter-spacing: 0.012em; color: var(--paper);
+    -webkit-text-stroke: 0.1em var(--ink); paint-order: stroke fill;
+    text-shadow: 0 0.07em 0 var(--ink), 0 0.12em 0.3em rgba(10, 2, 20, 0.45);
+  }
+  .strip {
+    position: absolute; left: 50%; top: 236px; transform: translateX(-50%) rotate(-1.5deg); margin: 0;
+    background: var(--ink); color: var(--paper); font: 700 21px/1.3 var(--body); white-space: nowrap;
+    padding: 7px 18px 8px; border-radius: 12px;
+    box-shadow: 0 0 0 5px var(--paper), 0 0 0 6px rgba(70, 60, 90, 0.3), 0 10px 20px rgba(10, 2, 20, 0.4);
+  }
+
+  .tag {
+    position: absolute; left: 50%; top: 312px; width: 430px; margin-left: -215px;
+    background: var(--red); color: var(--paper); border: 3px solid var(--ink); border-radius: 22px;
+    padding: 12px 16px 16px; text-align: center; transform: rotate(-3deg);
+    box-shadow: var(--rim), var(--lift);
+  }
+  .tag p { margin: 0; }
+  .hello { font: 400 54px/0.95 var(--meme); letter-spacing: 0.06em; }
+  .mwi { font: 700 19px/1.2 var(--body); margin: 2px 0 10px !important; }
+  .write { background: var(--paper); color: var(--ink); border-radius: 12px; padding: 12px 10px 10px; }
+  .num { font: 400 68px/1.02 var(--marker); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .unit { font: 400 30px/1 var(--marker); letter-spacing: 0.04em; margin-top: 2px !important; }
+
+  .who { position: absolute; display: block; filter: drop-shadow(0 16px 18px rgba(10, 2, 20, 0.55)); }
+  .poly { left: 22px; top: 338px; width: 340px; transform: rotate(-6deg); }
+  .troll { right: 34px; top: 318px; width: 282px; transform: rotate(7deg); }
+
+  /* icons */
+  body.icon { width: var(--s); height: var(--s); background: transparent; }
+  body.icon.tile { background: var(--ground); }
+  .badge {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(var(--r, 0deg));
+    width: calc(var(--s) * var(--k)); height: calc(var(--s) * var(--k));
+    background: var(--red); border: calc(var(--s) * var(--k) * 0.078) solid var(--ink);
+    border-radius: calc(var(--s) * var(--k) * 0.22);
+    display: grid; place-items: center;
+  }
+  .badge span {
+    font: 400 calc(var(--s) * var(--k) * 0.56)/1 var(--meme); color: var(--paper); letter-spacing: 0.01em;
+    margin-top: calc(var(--s) * var(--k) * 0.03);
+  }
+  .tile .badge {
+    box-shadow: 0 0 0 calc(var(--s) * 0.035) var(--paper), 0 calc(var(--s) * 0.04) calc(var(--s) * 0.07) rgba(10, 2, 20, 0.45);
+  }
+  .tile .badge span { -webkit-text-stroke: calc(var(--s) * 0.022) var(--ink); paint-order: stroke fill; }
+</style>
+</head>
+<body>
+<script>
+  const q = new URLSearchParams(location.search);
+  const icon = q.get("icon");
+  const wait = [];
+  const img = (src, cls) => {
+    const el = new Image();
+    el.src = src;
+    if (cls) el.className = cls;
+    wait.push(el.decode().catch(() => { throw new Error("image failed: " + src); }));
+    return el;
+  };
+
+  if (icon) {
+    // tile: purple full-bleed square (apple-touch-icon, manifest; safe for maskable crops).
+    // badge: the favicon's red rounded square with transparent corners.
+    const s = Number(q.get("size") || 512);
+    document.body.className = `icon ${icon}`;
+    document.body.style.setProperty("--s", `${s}px`);
+    document.body.style.setProperty("--k", icon === "tile" ? "0.64" : "0.94");
+    document.body.style.setProperty("--r", icon === "tile" ? "-4deg" : "0deg");
+    document.body.innerHTML = '<div class="badge"><span>EA</span></div>';
+  } else {
+    // A still of the sticker wall: a lattice like src/wall.ts (cell about W/10.5), each tile tilted.
+    const W = ["w_soy_crying", "w_bug_bee", "w_soldierB", "w_polycule", "w_bug_shrimp", "w_troll_1", "w_ewhore_selfie",
+      "w_soy_smug_calc", "w_bug_ant", "w_chad_yes", "w_doomer_girl", "w_soy_pointing_pair", "w_bug_mealworm", "w_soldierA",
+      "w_sjette_crying", "w_soy_shrimphug", "w_bug_bsf", "w_npc_wojak", "w_soy_ewhore", "w_trollface_head",
+      "w_soy_gaping", "w_ewhore_delighted", "w_soy_doomer_otaku", "w_sjette_pointing", "w_soy_crying_ant"];
+    const T = [
+      ["BUG LIVES MATTER!", "#141116", "#fff"], ["SAVE THE SHRIMPS!", "#ff8a5b", "#141116"], ["NOOO", "#fff", "#141116"],
+      ["TRILLIONS MUST DIE", "#9b3af9", "#fff"], ["RAT WORLD", "#141116", "#ffe23d"],
+    ];
+    const hash = (a, b, c) => { let h = Math.imul(a * 374761393 + b * 668265263 + c * 2147483647, 1274126177); h ^= h >>> 13; h = Math.imul(h, 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+    const wall = document.createElement("div");
+    wall.className = "wall";
+    const cell = 106;
+    let k = 0;
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 13; c++) {
+        const a = hash(r, c, 1), b = hash(r, c, 2), e = hash(r, c, 3);
+        const x = c * cell + (r % 2) * (cell / 2) + (b - 0.5) * 28;
+        const y = r * (cell * 0.92) + (e - 0.5) * 22;
+        const rot = (a - 0.5) * 30;
+        let el;
+        if ((r * 13 + c) % 9 === 4) {
+          const [t, bg, fg] = T[k++ % T.length];
+          el = document.createElement("div");
+          el.className = "ts";
+          el.textContent = t;
+          el.style.cssText = `background:${bg};color:${fg};max-width:${cell * 1.3}px;` + (bg === "#fff" ? "border:2px solid #141116;" : "");
+        } else {
+          const id = W[Math.floor(hash(r, c, 5) * W.length)];
+          el = img(`../src/stickers/${id}.webp`);
+          el.style.width = `${cell * (0.98 + hash(r, c, 6) * 0.18)}px`;
+          if (hash(r, c, 7) > 0.5) el.style.scale = "-1 1";
+        }
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.rotate = `${rot}deg`;
+        wall.append(el);
+      }
+    }
+    const vignette = document.createElement("div");
+    vignette.className = "vignette";
+    document.body.append(wall, vignette);
+
+    document.body.insertAdjacentHTML("beforeend", `
+      <h1 class="caption">ARE YOU AN<br />EFFECTIVE ANTRUIST?</h1>
+      <p class="strip">check your worth in Rat World</p>
+      <div class="tag">
+        <p class="hello">HELLO</p>
+        <p class="mwi">my worth is</p>
+        <div class="write"><p class="num">17,885,774</p><p class="unit">INSECTS</p></div>
+      </div>`);
+    document.body.append(img("../src/stickers/h_polycule.webp", "who poly"), img("../src/stickers/h_troll_1.webp", "who troll"));
+  }
+
+  window.ready = Promise.all(wait).then(() => document.fonts.ready).then(() => {
+    const need = ['54px "Meme"', '68px "Marker"'];
+    return Promise.all(need.map((f) => document.fonts.load(f, "HELLO 17,885,774 INSECTS")));
+  }).then(() => true);
+</script>
+</body>
+</html>

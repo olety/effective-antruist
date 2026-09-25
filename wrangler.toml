@@ -10,7 +10,8 @@ routes = [
 [assets]
 directory = "./dist"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+# 404-page: unknown paths get public/404.html with HTTP 404 (one view, no client routes to fall back to).
+not_found_handling = "404-page"
 run_worker_first = ["/api/*"]
 
 # GLINER_URL: set in .dev.vars for local dev (e.g. http://127.0.0.1:8765). Unset = TS fallback extractor.

@@ -34,6 +34,46 @@ function copySlots(): Plugin {
   };
 }
 
+// Structured data for search and AI answers, built from the same copy table: a WebSite node and
+// the WebApplication itself. index.html carries one <!--JSONLD--> marker; "<" is escaped so the
+// JSON can never close its <script>.
+function jsonLd(): Plugin {
+  const home = `${SITE.url}/`;
+  const creator = { "@type": "Person", name: "therotobo", url: "https://x.com/therotobo" };
+  const graph = {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", "@id": `${home}#website`, name: SITE.title, url: home, description: SITE.description, inLanguage: "en", creator },
+      {
+        "@type": "WebApplication",
+        "@id": `${home}#app`,
+        name: SITE.title,
+        url: home,
+        description: SITE.description,
+        image: `${SITE.url}/og.png`,
+        applicationCategory: "EntertainmentApplication",
+        operatingSystem: "Any",
+        browserRequirements: "Requires JavaScript and WebAssembly. Runs GLiNER2.5 small in the browser.",
+        isAccessibleForFree: true,
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+        inLanguage: "en",
+        genre: "parody",
+        isPartOf: { "@id": `${home}#website` },
+        creator,
+      },
+    ],
+  };
+  const tag = `<script type="application/ld+json">${JSON.stringify(graph).replace(/</g, "\\u003c")}</script>`;
+  return {
+    name: "json-ld",
+    transformIndexHtml(html, ctx) {
+      if (html.includes("<!--JSONLD-->")) return html.replace("<!--JSONLD-->", tag);
+      if (ctx.path === "/index.html") throw new Error("index.html: no <!--JSONLD--> marker");
+      return html;
+    },
+  };
+}
+
 // `bun run dev` = Vite with HMR, proxying /api to `wrangler dev` on :8787 (API=http://127.0.0.1:<port> overrides).
 // gliner-test.html is dev-only: `vite` serves it at /gliner-test.html; the build ships index.html only.
 const api = process.env.API ?? "http://127.0.0.1:8787";
@@ -41,7 +81,7 @@ const api = process.env.API ?? "http://127.0.0.1:8787";
 const isolation = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "credentialless" };
 
 export default defineConfig({
-  plugins: [ortNoWasmAssets(), copySlots()],
+  plugins: [ortNoWasmAssets(), copySlots(), jsonLd()],
   server: { proxy: { "/api": api }, headers: isolation },
   preview: { proxy: { "/api": api }, headers: isolation },
   // assetsInlineLimit 0: stickers, fonts and sounds stay separate files, out of the entry chunk.

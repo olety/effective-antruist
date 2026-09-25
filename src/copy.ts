@@ -121,8 +121,6 @@ export const JOKES: Record<string, Joke> = {
 export const COPY: Record<string, string> = Object.fromEntries(Object.entries(JOKES).map(([k, v]) => [k, v.line]));
 
 export const LOADING_LINES: string[] = ["consulting the shrimp council...", "converting you into black soldier flies...", "steelmanning your lunch...", "the polycule is voting on you...", "Jev is doing the Skittles maths...", "shutting up and multiplying..."];
-/** {worth} and {url} are filled in by the page. */
-export const SHARE_TEXT = "> paste bio > get priced in black soldier flies > {worth} > NOOO. check your worth in Rat World: {url}";
 
 /** Main line for a jokeKey (engine tests and old callers). */
 export const joke = (key: string) => JOKES[key]?.line ?? "";
@@ -149,8 +147,8 @@ export function pickJoke(key: string, used: Set<string>): string {
 export const SITE = {
   title: "Effective Antruist",
   url: "https://effectiveantruist.com",
-  /** One constant for the source link until the repo is public. */
-  repo: "https://github.com/",
+  /** The source link in the about panel (the public repo). */
+  repo: "https://github.com/olety/effective-antruist",
   headline: "ARE YOU AN EFFECTIVE ANTRUIST?",
   subline: "check your worth in Rat World",
   description: "Paste your bio. Get priced in insects, with real Rethink Priorities welfare ranges. A parody.",
@@ -185,6 +183,35 @@ export const SITE = {
     'A parody. Bentham\'s Bulldog wrote "Insects Matter More Than People in the Aggregate." We did the maths on you. ' +
     "Weights: Rethink Priorities. Spans: GLiNER2.5 in your browser. Verdicts: Jev.",
   source: "source",
+} as const;
+
+/** The SHARE button, its popover and the 1200x630 result card. */
+export const SHARE = {
+  button: "SHARE",
+  menuLabel: "share your worth", // DRAFT: owner pass
+  menuTitle: "POST YOUR WORTH", // DRAFT: owner pass
+  x: "X",
+  bluesky: "Bluesky",
+  threads: "Threads",
+  reddit: "Reddit",
+  linkedin: "LinkedIn",
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  copyLink: "copy link",
+  copyCard: "copy card",
+  saveCard: "save card",
+  linkCopied: "LINK COPIED",
+  cardCopied: "CARD COPIED",
+  cardSaved: "CARD SAVED",
+  failed: "SHARE FAILED",
+  /** The share line: the number, the caste, the payoff when it is an owner line, the question. */
+  lead: (n: string) => `my worth in Rat World: ${n} insects.`, // DRAFT: owner pass
+  caste: (c: string) => `the rats filed me under ${c}.`, // DRAFT: owner pass
+  ask: "are you an effective antruist?", // DRAFT: owner pass
+  /** Card copy. */
+  cardCaste: (c: string | null) => (c ? `CASTE: ${c.toUpperCase()}` : "CASTE: UNSORTED, JEV IS NAPPING"), // DRAFT: owner pass
+  cardSite: "effectiveantruist.com",
+  file: (n: string) => `effective-antruist-${n}.png`,
 } as const;
 
 /** Small status copy for the in-browser GLiNER and the judge. */

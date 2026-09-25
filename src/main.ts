@@ -9,6 +9,7 @@ import { CITATIONS, WEIGHT_SOURCES, WEIGHT_SOURCE_IDS } from "./engine/sources";
 import type { Judgement, WeightSourceId } from "./engine/types";
 import { extract, glinerInfo, loadGliner, type GlinerProgress, type GlinerSpan } from "./gliner";
 import * as audio from "./audio";
+import { initShare, type ShareInfo } from "./share";
 import { Wall } from "./wall";
 import {
   BLANK, CAST_LIST, IDLE_MIX, altFor, flags, pickLines, reaction, verdictMix, type Reaction, type ReactionId,
@@ -85,21 +86,24 @@ toggle.addEventListener("click", () => {
 });
 
 // ---- about this page ------------------------------------------------------------------
-// A quiet pill by the wall toggle opens a sticker card over the page: how it works, the live
-// model status, the credits. Second click, the close button, Escape or a click outside shuts it.
+// A quiet pill by the wall toggle opens the about panel: how it works, the live model status, the
+// credits. Desktop docks it as a slim drawer on the right edge (the page shifts over when they would
+// overlap); phones get a bottom sheet. Second click, the close button, Escape or a click outside shuts it.
 
 const aboutBtn = $<HTMLButtonElement>("aboutBtn");
 const aboutEl = $("about");
+// Out of the footer so it docks to the viewport, not to the footer's box.
+document.body.appendChild(aboutEl);
 function setAbout(open: boolean, refocus = false) {
   if (open === !aboutEl.hidden) return;
   aboutEl.hidden = !open;
   aboutBtn.setAttribute("aria-expanded", String(open));
-  if (open) {
-    aboutEl.focus({ preventScroll: true });
-    // Phones scroll: make sure the whole card is on screen. A one-screen desktop never moves.
-    const r = aboutEl.getBoundingClientRect();
-    if (r.top < 0 || r.bottom > innerHeight) aboutEl.scrollIntoView({ block: "nearest", behavior: reduced() ? "auto" : "smooth" });
-  } else if (refocus) aboutBtn.focus({ preventScroll: true });
+  document.body.classList.toggle("about-open", open);
+  // The stage may shift to make room: re-fit the number and re-aim the wall once it settles.
+  requestAnimationFrame(relayout);
+  setTimeout(relayout, reduced() ? 0 : 280);
+  if (open) aboutEl.focus({ preventScroll: true });
+  else if (refocus) aboutBtn.focus({ preventScroll: true });
 }
 aboutBtn.addEventListener("click", () => setAbout(Boolean(aboutEl.hidden)));
 $("aboutClose").addEventListener("click", () => setAbout(false, true));
@@ -290,6 +294,7 @@ function choose(id: WeightSourceId) {
   // The insects on the wall follow the worth under the new weights.
   const r = tagRect();
   wall.setMix(verdictMix(flags(current), current.totals.bySource[selected].worth), { x: r.x + r.w / 2, y: r.y + r.h / 2 }, true);
+  share.refresh();
 }
 
 const measure = document.createElement("canvas").getContext("2d")!;
@@ -541,6 +546,8 @@ function showResult() {
   wall.setMix(verdictMix(flags(j), j.totals.bySource[selected].worth), { x: r.x + r.w / 2, y: r.y + r.h / 2 }, true);
   $("announce").textContent = `You are worth ${plain(j.totals.bySource[selected].worth)} insects. ${react!.line} ${react!.caption}`;
   void revealSound(j, first ? 1100 : 800);
+  share.close();
+  share.refresh();
 }
 
 /** Boom, the counter, then the verdict's voice; the soldiers argue after it in Jev's 0.2-0.8 band. */
@@ -567,11 +574,12 @@ const retarget = () => {
   });
 };
 addEventListener("scroll", retarget, { passive: true });
-addEventListener("resize", () => {
+function relayout() {
   retarget();
   if (current) fitNumber(big(current.totals.bySource[selected].worth));
   autosize();
-});
+}
+addEventListener("resize", relayout);
 
 // ---- judging -------------------------------------------------------------------------
 
@@ -727,6 +735,28 @@ copyBtn.addEventListener("click", async () => {
   copyBtn.textContent = ok ? SITE.copied : SITE.copyFailed;
   if (ok) void audio.play("sfx-airhorn", 0.6);
   setTimeout(() => (copyBtn.textContent = SITE.copy), 1600);
+});
+
+// ---- share ----------------------------------------------------------------------------------
+// SHARE sits beside COPY RESULT in one row (main.ts builds it; index.html only has the copy button).
+
+const actions = document.createElement("div");
+actions.className = "actions";
+actions.id = "actions";
+copyBtn.parentElement!.insertBefore(actions, copyBtn);
+actions.appendChild(copyBtn);
+/** A few wall stickers for the result card's background (same-origin, so the canvas stays clean). */
+const CARD_STICKERS = ["w_bug_shrimp", "w_bug_ant", "w_bug_bee", "w_polycule", "w_bug_bsf", "w_trollface_head", "w_soldierA", "w_bug_mealworm"];
+function shareInfo(): ShareInfo | null {
+  if (!current || !react) return null;
+  const w = current.totals.bySource[selected].worth;
+  return { num: big(w), plainNum: plain(w), caste: current.caste, line: react.line, hero: art(WHO[react.who].hero) };
+}
+const share = initShare({
+  row: actions,
+  get: shareInfo,
+  stickers: CARD_STICKERS.map(art).filter(Boolean),
+  sound: (ok) => void audio.play(ok ? "sfx-airhorn" : "sfx-sad-trombone", 0.6),
 });
 
 autosize();

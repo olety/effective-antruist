@@ -1,0 +1,23 @@
+# Effective Antruist
+
+> Paste your bio. Get priced in insects, with real Rethink Priorities welfare ranges. A parody.
+
+Effective Antruist is a one-page parody of moral maths. You paste a bio or what you did today, and the page prices you in insects ("HELLO my worth is N INSECTS"), with a ledger that shows where every insect came from.
+
+## How it works
+
+- Spans: GLiNER2.5 small runs in your browser (int8 ONNX on WebAssembly) and finds the food, pets, money, jobs and sins in your text.
+- Verdicts: Jev, a typed decision model, answers five questions about the text: caste, moral circle, Skittles for shrimp, doomer, eats meat.
+- Price: a deterministic engine turns each line into insects. Default weights are Rethink Priorities' 2023 welfare-range medians (1 human = 76.92 insects); you can switch to their 2025 moral-parliament means or to neuron counts.
+- Sources: every number is cited in SOURCES.md in the repo. The spark is Bentham's Bulldog's article "Insects Matter More Than People in the Aggregate".
+
+## Pages
+
+- [Effective Antruist](https://effectiveantruist.com/): the whole site, one screen
+
+## Links
+
+- [Source code](https://github.com/olety/effective-antruist)
+- [Made by @therotobo](https://x.com/therotobo)
+
+It is a parody. The welfare ranges are real; the verdicts are jokes.

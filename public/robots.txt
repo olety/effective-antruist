@@ -1,0 +1,8 @@
+# Effective Antruist. Every crawler is welcome; nothing is blocked for training or search.
+# /api/ is a POST-only JSON endpoint with nothing to index.
+
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://effectiveantruist.com/sitemap.xml
