@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GLiNER test</title>
+    <style>
+      body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; max-width: 900px; }
+      textarea { width: 100%; box-sizing: border-box; font: inherit; }
+      pre { background: #f4f4f4; padding: 8px; overflow-x: auto; white-space: pre-wrap; }
+      button { margin: 2px 4px 2px 0; }
+      progress { width: 240px; vertical-align: middle; }
+    </style>
+  </head>
+  <body>
+    <h1>GLiNER2.5-small in the browser</h1>
+    <p>Dev-only page. Default backend is WASM; <code>?ep=webgpu</code> tries WebGPU (wrong spans on onnxruntime-web 1.30). <code>?auto=1</code> loads and runs the three examples.</p>
+    <p>
+      <label><input type="checkbox" id="webgpu" /> try WebGPU</label>
+      <button id="load">Load model</button>
+      <progress id="bar" max="1" value="0"></progress>
+      <span id="progress">not loaded</span>
+    </p>
+    <p id="examples"></p>
+    <textarea id="text" rows="5"></textarea>
+    <p><button id="run">Extract</button> <button id="all">Run all three examples</button></p>
+    <pre id="out"></pre>
+    <script type="module" src="/src/gliner/test-page.ts"></script>
+  </body>
+</html>

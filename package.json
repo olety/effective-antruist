@@ -9,13 +9,20 @@
     "gliner": "cd service && .venv/bin/python app.py",
     "test": "bun test",
     "smoke": "bun scripts/smoke.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "model": "bun scripts/build-model.ts",
+    "test:gliner": "bun scripts/gliner-browser-test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260925.1",
     "@types/bun": "^1.4.2",
+    "playwright-core": "1.55.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",
     "wrangler": "^4.140.0"
+  },
+  "dependencies": {
+    "@huggingface/tokenizers": "0.2.0",
+    "onnxruntime-web": "1.30.0"
   }
 }

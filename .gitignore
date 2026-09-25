@@ -10,3 +10,7 @@ service/models/
 service/__pycache__/
 *.log
 .DS_Store
+
+# In-browser GLiNER bundle (bun run model) and its build cache
+public/model/
+.cache/

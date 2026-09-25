@@ -1,7 +1,10 @@
-// Cloudflare Worker: POST /api/judge {text} -> {spans, jev, ledger, totals, ...}. Static assets serve the rest.
+// Cloudflare Worker: POST /api/judge {text, source?, spans?} -> {spans, jev, ledger, totals, ...}.
+// Static assets serve the rest. `spans` comes from in-browser GLiNER (src/gliner); when it is
+// well-formed the server skips GLINER_URL, otherwise it extracts as before.
 import { callJev } from "../src/engine/jev";
 import { fallbackExtract, MAX_CHARS } from "../src/engine/extract";
 import { judge } from "../src/engine/engine";
+import { parseClientSpans } from "../src/gliner/client-spans";
 import type { Span, WeightSourceId } from "../src/engine/types";
 
 export interface Env {
@@ -37,7 +40,7 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === "/api/judge") {
       if (req.method !== "POST") return json({ error: "POST only" }, 405);
-      let body: { text?: unknown; source?: unknown };
+      let body: { text?: unknown; source?: unknown; spans?: unknown };
       try {
         body = await req.json();
       } catch {
@@ -49,7 +52,12 @@ export default {
         ? (body.source as WeightSourceId)
         : "rp2023";
       const t0 = Date.now();
-      const [ex, jev] = await Promise.all([extractSpans(text, env), callJev(text, env.JEV_KEY)]);
+      const clientSpans = body.spans === undefined ? null : parseClientSpans(body.spans, text);
+      const rejected = body.spans !== undefined && !clientSpans;
+      const extraction = clientSpans
+        ? Promise.resolve({ spans: clientSpans, extractor: "gliner" as const, note: "spans from the browser" })
+        : extractSpans(text, env).then((ex) => (rejected ? { ...ex, note: `browser spans rejected; ${ex.note ?? "server GLiNER"}` } : ex));
+      const [ex, jev] = await Promise.all([extraction, callJev(text, env.JEV_KEY)]);
       const j = judge({ text, spans: ex.spans, extractor: ex.extractor, jev, selected });
       return json({ ...j, truncated: body.text.length > MAX_CHARS, extractorNote: ex.note ?? null, ms: Date.now() - t0 });
     }
