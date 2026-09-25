@@ -60,6 +60,8 @@ function jsonLd(): Plugin {
         genre: "parody",
         isPartOf: { "@id": `${home}#website` },
         creator,
+        datePublished: "2026-09-25",
+        dateModified: new Date().toISOString().slice(0, 10),
       },
     ],
   };

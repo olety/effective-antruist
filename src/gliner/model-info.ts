@@ -16,6 +16,21 @@ export interface ManifestChunk {
   /** File name relative to the manifest. */
   url: string;
   bytes: number;
+  /** sha256 of the chunk's raw (decompressed) bytes; the loader checks it on either path. */
+  sha256: string;
+  /**
+   * The same chunk gzip-compressed (model chunks only: Cloudflare serves .bin uncompressed, while
+   * .json and .wasm already get zstd on the wire). The loader fetches it and decodes it with
+   * DecompressionStream("gzip"), falling back to `url` when that is missing or fails.
+   */
+  gz?: ManifestGz;
+}
+
+export interface ManifestGz {
+  url: string;
+  /** Size of the .gz file (what goes over the wire). */
+  bytes: number;
+  /** sha256 of the .gz file itself (lets the build skip recompressing). */
   sha256: string;
 }
 
@@ -56,4 +71,12 @@ export function keysFor(backend: Backend): ManifestKey[] {
 
 export function manifestBytes(m: Manifest, keys: ManifestKey[]): number {
   return keys.reduce((n, k) => n + m.files[k].bytes, 0);
+}
+
+/** Bytes fetched for one chunk: the .gz size when `gzip` is on and the chunk has one. */
+export const wireChunkBytes = (c: ManifestChunk, gzip: boolean) => (gzip && c.gz ? c.gz.bytes : c.bytes);
+
+/** Bytes fetched for `keys` (before any zstd Cloudflare adds to .json and .wasm). */
+export function manifestWireBytes(m: Manifest, keys: ManifestKey[], gzip: boolean): number {
+  return keys.reduce((n, k) => n + m.files[k].chunks.reduce((s, c) => s + wireChunkBytes(c, gzip), 0), 0);
 }

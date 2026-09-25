@@ -17,6 +17,10 @@ export interface GlinerLoadInfo {
   /** True when every file came from Cache Storage (no network). */
   fromCache: boolean;
   bytes: number;
+  /** Bytes fetched from the network, before any zstd the server adds (0 from cache). */
+  wireBytes: number;
+  /** True when the model chunks came gzip-compressed and DecompressionStream decoded them. */
+  gzip: boolean;
   downloadMs: number;
   /** Session creation plus the warm-up run (WebGPU shader compile happens here). */
   compileMs: number;
@@ -36,7 +40,7 @@ export interface GlinerResult {
 }
 
 export type ToWorker =
-  | { type: "load"; id: number; baseUrl: string; backend: Backend }
+  | { type: "load"; id: number; baseUrl: string; backend: Backend; testNoDecompressionStream?: boolean }
   | { type: "extract"; id: number; text: string; raw?: boolean };
 
 export type FromWorker =

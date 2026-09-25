@@ -3,7 +3,10 @@
 //   1. download the fp32 ONNX graph + tokenizer from Hugging Face at a pinned revision
 //   2. quantise the graph to int8 (onnxruntime dynamic quantisation, uv venv)
 //   3. split the int8 graph and the onnxruntime-web wasm binaries into <= 24 MiB chunks
-//   4. write public/model/manifest.json with the sha256 and bytes of every file and chunk
+//   4. gzip -9 each model chunk to <chunk>.gz (Cloudflare sends .bin uncompressed; .json and
+//      .wasm already get zstd on the wire, so they stay as they are)
+//   5. write public/model/manifest.json with the sha256 and bytes of every file and chunk, plus
+//      each .gz name, size and sha256 (the chunk sha256 is always of the decompressed bytes)
 //
 // Idempotent: each step checks hashes and skips work that is already done.
 // Usage: bun run model        (FORCE=1 to redo every step)
@@ -12,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { join } from "node:path";
 import {
   CHUNK_BYTES, MODEL_DIR, MODEL_REPO, MODEL_REVISION, QUANT_ID, keysFor, manifestBytes,
-  type Manifest, type ManifestFile,
+  manifestWireBytes, type Manifest, type ManifestFile, type ManifestGz,
 } from "../src/gliner/model-info";
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -103,8 +106,38 @@ async function quantise(fp32: string): Promise<string> {
   return dest;
 }
 
+/** .gz entries of the previous build, keyed by "<chunk url> <chunk sha256>". */
+function previousGz(): Map<string, ManifestGz> {
+  const out = new Map<string, ManifestGz>();
+  try {
+    const old = JSON.parse(readFileSync(join(OUT, "manifest.json"), "utf8")) as Manifest;
+    for (const f of Object.values(old.files ?? {})) for (const c of f.chunks) if (c.gz) out.set(`${c.url} ${c.sha256}`, c.gz);
+  } catch {
+    /* no previous manifest */
+  }
+  return out;
+}
+
+/** Write `<url>.gz` (gzip -9) unless the previous build left the same file. */
+function writeGz(url: string, part: Uint8Array, hash: string, prev: Map<string, ManifestGz>, written: Set<string>): ManifestGz {
+  const gzUrl = `${url}.gz`;
+  const path = join(OUT, gzUrl);
+  written.add(gzUrl);
+  const old = prev.get(`${url} ${hash}`);
+  if (!FORCE && old && old.url === gzUrl && existsSync(path) && statSync(path).size === old.bytes && sha256(readFileSync(path)) === old.sha256) {
+    return old;
+  }
+  const gz = Bun.gzipSync(part as Uint8Array<ArrayBuffer>, { level: 9 });
+  if (gz.length > CHUNK_BYTES) throw new Error(`gz chunk too big: ${gzUrl}`);
+  writeFileSync(path, gz);
+  log(`  gzip ${url}: ${mb(part.length)} -> ${mb(gz.length)}`);
+  return { url: gzUrl, bytes: gz.length, sha256: sha256(gz) };
+}
+
 /** Split `buf` into chunk files in OUT; rewrite a chunk only when its bytes differ. */
-function writeChunks(name: string, buf: Uint8Array, ext: string, written: Set<string>): ManifestFile {
+function writeChunks(
+  name: string, buf: Uint8Array, ext: string, written: Set<string>, gzPrev: Map<string, ManifestGz> | null = null,
+): ManifestFile {
   const chunks = [];
   const n = Math.max(1, Math.ceil(buf.length / CHUNK_BYTES));
   for (let i = 0; i < n; i++) {
@@ -115,7 +148,7 @@ function writeChunks(name: string, buf: Uint8Array, ext: string, written: Set<st
     const same = existsSync(path) && statSync(path).size === part.length && sha256(readFileSync(path)) === hash;
     if (FORCE || !same) writeFileSync(path, part);
     written.add(url);
-    chunks.push({ url, bytes: part.length, sha256: hash });
+    chunks.push({ url, bytes: part.length, sha256: hash, ...(gzPrev ? { gz: writeGz(url, part, hash, gzPrev, written) } : {}) });
   }
   return { name, bytes: buf.length, sha256: sha256(buf), chunks };
 }
@@ -140,6 +173,7 @@ async function main() {
   };
 
   const written = new Set<string>(["manifest.json"]);
+  const gzPrev = previousGz();
   const manifest: Manifest = {
     format: 1,
     repo: MODEL_REPO,
@@ -148,7 +182,7 @@ async function main() {
     ort: ortVersion,
     chunkBytes: CHUNK_BYTES,
     files: {
-      model: writeChunks("model_int8.onnx", readFileSync(int8), ".bin", written),
+      model: writeChunks("model_int8.onnx", readFileSync(int8), ".bin", written, gzPrev),
       tokenizer: writeChunks("tokenizer.json", readFileSync(tokenizer), ".json", written),
       tokenizerConfig: writeChunks("tokenizer_config.json", readFileSync(tokenizerConfig), ".json", written),
       ortWasm: writeChunks(ORT_WASM, ortFile(ORT_WASM), ".wasm", written),
@@ -175,8 +209,9 @@ async function main() {
   const total = Object.values(manifest.files).reduce((n, f) => n + f.bytes, 0);
   log(`model ${mb(manifest.files.model.bytes)} in ${manifest.files.model.chunks.length} chunks; ` +
     `${chunks} files, ${mb(total)} on disk; onnxruntime-web ${ortVersion}`);
-  log(`a visitor downloads ${mb(manifestBytes(manifest, keysFor("wasm")))} (wasm) or ` +
-    `${mb(manifestBytes(manifest, keysFor("webgpu")))} (webgpu), once`);
+  log(`a visitor downloads ${mb(manifestWireBytes(manifest, keysFor("wasm"), true))} (wasm) or ` +
+    `${mb(manifestWireBytes(manifest, keysFor("webgpu"), true))} (webgpu) before zstd, once ` +
+    `(${mb(manifestBytes(manifest, keysFor("wasm")))} / ${mb(manifestBytes(manifest, keysFor("webgpu")))} decompressed)`);
   log(`done in ${((performance.now() - t0) / 1000).toFixed(1)}s -> ${OUT}`);
 }
 

@@ -10,6 +10,9 @@ import type { Judgement, WeightSourceId } from "./engine/types";
 import { extract, glinerInfo, loadGliner, type GlinerProgress, type GlinerSpan } from "./gliner";
 import * as audio from "./audio";
 import { initShare, type ShareInfo } from "./share";
+import {
+  BADGES, PILL_LABEL, PROXY_NOTE, SOURCES_URL, WELFARE_RANGE, explainLine, lineLabel, unitLines, weightLines,
+} from "./explain";
 import { Wall } from "./wall";
 import {
   BLANK, CAST_LIST, IDLE_MIX, altFor, flags, pickLines, reaction, verdictMix, type Reaction, type ReactionId,
@@ -23,7 +26,7 @@ const art = (name: string) => STICKERS[`./stickers/${name}.webp`];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** Total download of the in-browser model (public/model/manifest.json: model + tokenizer + wasm). */
-const BRAIN_MB = 111;
+const BRAIN_MB = 68;
 const stage = $("stage");
 const textEl = $<HTMLTextAreaElement>("text");
 const hl = $("hl");
@@ -69,7 +72,7 @@ document.fonts.load("40px Meme", "BUG").finally(() => wall.renderText());
 const lazy = () => {
   // Nothing but the page itself is on the critical path: stickers slap on right after load.
   wall.load(INSECTS);
-  // The desktop model (94 MB) waits for the wall's stickers, at most 6 s, so it never starves them.
+  // The desktop model (68 MB on the wire) waits for the wall's stickers, at most 6 s, so it never starves them.
   setTimeout(() => void Promise.race([wall.load(), new Promise((r) => setTimeout(r, 6000))]).then(bootBrain), 40);
   const idle = (cb: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(cb, { timeout: 1200 }) : setTimeout(cb, 400));
   idle(() => void document.fonts.load("40px Marker", "0123456789,INSECTS"));
@@ -157,6 +160,151 @@ const unsigned = (n: number) => short(Math.abs(n)).replace(/^[+−]/, "");
 // ---- text field -----------------------------------------------------------------
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+
+// ---- explainers: the "?" by the exchange rate, the ⓘ by the pills, the drawer block ------------
+// Small sticker popovers anchored under their button. Second click, Escape or a click outside shuts
+// them; focus moves in on open (so the SOURCES link is reachable) and back to the button on Escape.
+
+interface Pop {
+  btn: HTMLButtonElement;
+  el: HTMLElement;
+  close: (refocus?: boolean) => void;
+  place: () => void;
+  refresh: () => void;
+}
+const pops: Pop[] = [];
+
+function makePop(btn: HTMLButtonElement, id: string, label: string, render: () => string): Pop {
+  const el = document.createElement("div");
+  el.className = "pop";
+  el.id = id;
+  el.hidden = true;
+  el.tabIndex = -1;
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", label);
+  document.body.appendChild(el);
+  btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-controls", id);
+  btn.setAttribute("aria-haspopup", "dialog");
+  const place = () => {
+    if (el.hidden) return;
+    const r = btn.getBoundingClientRect();
+    el.style.maxHeight = "";
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const left = Math.max(16, Math.min(innerWidth - w - 16, r.left + r.width / 2 - w / 2));
+    const roomBelow = innerHeight - r.bottom - 12 - 8;
+    const roomAbove = r.top - 12 - 8;
+    // Below when it fits (or when below has more room); tall content scrolls inside the sticker.
+    const up = h > roomBelow && roomAbove > roomBelow;
+    const room = up ? roomAbove : roomBelow;
+    // Phones scroll the page, so there the popover keeps its full height below the button.
+    const cap = innerWidth >= 900 && h > room ? room : 0;
+    if (cap) el.style.maxHeight = `${Math.max(160, cap)}px`;
+    const hh = cap ? Math.max(160, cap) : h;
+    const top = up ? r.top - 12 - hh : r.bottom + 12;
+    el.style.left = `${left + scrollX}px`;
+    el.style.top = `${top + scrollY}px`;
+    el.style.setProperty("--ax", `${r.left + r.width / 2 - left}px`);
+    el.classList.toggle("above", up);
+  };
+  const refresh = () => {
+    if (el.hidden) return;
+    el.innerHTML = render();
+    place();
+  };
+  const close = (refocus = false) => {
+    if (el.hidden) return;
+    el.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    if (refocus) btn.focus({ preventScroll: true });
+  };
+  const open = () => {
+    for (const p of pops) if (p.btn !== btn) p.close();
+    el.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    el.innerHTML = render();
+    place();
+    el.focus({ preventScroll: true });
+  };
+  btn.addEventListener("click", () => (el.hidden ? open() : close()));
+  el.addEventListener("focusout", (e) => {
+    const to = e.relatedTarget as Node | null;
+    if (to && !el.contains(to) && to !== btn) close();
+  });
+  const pop = { btn, el, close, place, refresh };
+  pops.push(pop);
+  return pop;
+}
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  const p = pops.find((x) => !x.el.hidden);
+  if (!p) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  p.close(true);
+});
+document.addEventListener("pointerdown", (e) => {
+  const t = e.target as Node;
+  for (const p of pops) if (!p.el.hidden && !p.el.contains(t) && !p.btn.contains(t)) p.close();
+});
+
+const sourcesLink = `<a href="${SOURCES_URL}" target="_blank" rel="noopener">SOURCES.md</a>`;
+const popTitle = (s: string) => `<p class="pop-title">${esc(s)}</p>`;
+
+// The exchange-rate line on the tag: its text, a small "?", then the weights line.
+rateEl.innerHTML = "";
+const rateText = document.createElement("span");
+const rateWeights = document.createElement("span");
+const rateQ = document.createElement("button");
+rateQ.type = "button";
+rateQ.className = "qbtn";
+rateQ.textContent = "?";
+rateQ.setAttribute("aria-label", "what is an insect here?");
+rateQ.title = "what is an insect here?";
+const rateLast = document.createElement("span");
+const rateKeep = document.createElement("span");
+rateKeep.className = "nw";
+for (const n of [rateLast, document.createTextNode(" "), rateQ]) rateKeep.appendChild(n);
+for (const n of [rateText, rateKeep, document.createElement("br"), rateWeights]) rateEl.appendChild(n);
+makePop(rateQ, "popUnit", "the unit", () =>
+  popTitle("COUNTED IN INSECTS") + unitLines(selected).map((s) => `<p>${esc(s)}</p>`).join(""),
+);
+
+// The ⓘ beside the three weight pills (outside the radiogroup, in one row with it).
+const pillsRow = document.createElement("div");
+pillsRow.className = "pills-row";
+pillsEl.replaceWith(pillsRow);
+pillsRow.appendChild(pillsEl);
+const infoBtn = document.createElement("button");
+infoBtn.type = "button";
+infoBtn.className = "ibtn";
+infoBtn.textContent = "i";
+infoBtn.setAttribute("aria-label", "how are the weights calculated?");
+infoBtn.title = "how are the weights calculated?";
+pillsRow.appendChild(infoBtn);
+const weightsHtml = (withRange: boolean) =>
+  (withRange ? `<p>${esc(WELFARE_RANGE)}</p>` : "") +
+  `<ul class="wl">${weightLines()
+    .map((w) => `<li${w.id === selected ? ' class="on"' : ""}><b>${esc(w.head)}:</b> ${esc(w.body)}</li>`)
+    .join("")}</ul>` +
+  `<p>${esc(PROXY_NOTE)}</p><p>Every figure, with quotes and links: ${sourcesLink}</p>`;
+makePop(infoBtn, "popWeights", "the weights", () => popTitle("THE WEIGHTS") + weightsHtml(true));
+
+// "How the score works" in the about drawer, after how the page works.
+const scoreEl = document.createElement("div");
+scoreEl.className = "about-score";
+aboutEl.querySelector(".about-how")!.insertAdjacentElement("afterend", scoreEl);
+function renderScore() {
+  const badge = (b: { label: string; meaning: string }) =>
+    `<li><span class="flag${b === BADGES.unverified ? " unv" : ""}">${esc(b.label)}</span> ${esc(b.meaning)}</li>`;
+  scoreEl.innerHTML =
+    `<h3>HOW THE SCORE WORKS</h3><p>${esc(unitLines(selected).join(" "))}</p>` +
+    weightsHtml(false) +
+    `<ul class="bl">${badge(BADGES.notInTotal)}${badge(BADGES.unverified)}</ul>`;
+}
+renderScore();
+
 
 function autosize() {
   // With a result on screen the box hugs its text (rows=1 lets it shrink below four rows), so the
@@ -246,7 +394,6 @@ for (const chip of pool) {
 
 // ---- result -----------------------------------------------------------------------
 
-const PILL_LABEL: Record<WeightSourceId, string> = { rp2023: "RP median", rpMean: "RP mean", neurons: "Neurons" };
 const pillBtns = WEIGHT_SOURCE_IDS.map((id) => {
   const b = document.createElement("button");
   b.type = "button";
@@ -291,6 +438,9 @@ function choose(id: WeightSourceId) {
   if (react && react.who !== was) renderReaction();
   else renderReactionText();
   renderLedger(true);
+  syncActive();
+  renderScore();
+  pops.forEach((p) => p.refresh());
   void audio.play("sfx-blub", 0.5);
   // The insects on the wall follow the worth under the new weights.
   const r = tagRect();
@@ -313,8 +463,11 @@ function renderNumbers(ms: number) {
   const t = j.totals.bySource[selected];
   const to = t.worth;
   fitNumber(big(to));
-  rateEl.innerHTML =
-    `${esc(JOKES["total.human_rate"].line.replace("{n}", big(t.humanInInsects)))}<br>weights: ${esc(WEIGHT_SOURCES[selected].name)}`;
+  const rt = JOKES["total.human_rate"].line.replace("{n}", big(t.humanInInsects));
+  const cut = rt.lastIndexOf(" ");
+  rateText.textContent = rt.slice(0, cut + 1);
+  rateLast.textContent = rt.slice(cut + 1);
+  rateWeights.textContent = `weights: ${WEIGHT_SOURCES[selected].name}`;
   cancelAnimationFrame(tween);
   if (reduced() || ms <= 0) {
     shownNum = to;
@@ -357,8 +510,8 @@ function renderLedger(fresh: boolean) {
       btn.setAttribute("aria-controls", `more-${n}`);
       const c = CITATIONS[l.citationId];
       btn.innerHTML =
-        `<span class="amt"></span><span class="lbl">${esc(cleanLabel(l.label))}` +
-        `${l.countsInTotal ? "" : `<span class="flag">${esc(SITE.notInTotal)}</span>`}</span>`;
+        `<span class="amt"></span><span class="lbl">${esc(cleanLabel(lineLabel(l)))}` +
+        `${l.countsInTotal ? "" : `<span class="flag" title="${esc(BADGES.notInTotal.meaning)}">${esc(SITE.notInTotal)}</span>`}</span>`;
       const more = document.createElement("p");
       more.className = "more";
       more.id = `more-${n}`;
@@ -369,9 +522,11 @@ function renderLedger(fresh: boolean) {
           : esc(c.title)
         : esc(l.citationId);
       const jk = pickJoke(l.jokeKey, used);
+      const ex = explainLine(l, selected);
       more.innerHTML =
+        `${ex ? `<span class="ex">${withBadges(ex)}</span>` : ""}` +
         `${jk ? `<span class="jk">${esc(jk)}</span>` : ""}Maths: ${esc(l.working.note)}. Source: ${src}` +
-        `${c?.status === "UNVERIFIED" ? " (unverified)" : ""}.`;
+        `${c?.status === "UNVERIFIED" ? ` ${UNV_BADGE}` : ""}.`;
       btn.addEventListener("click", () => {
         active = active === idx ? -1 : idx;
         syncActive();
@@ -393,6 +548,31 @@ function renderLedger(fresh: boolean) {
   }
 }
 
+const UNV_BADGE = `<span class="flag unv" title="${esc(BADGES.unverified.meaning)}">${esc(BADGES.unverified.label)}</span>`;
+/** Escaped explanation text with every UNVERIFIED turned into the badge. */
+const withBadges = (s: string) => esc(s).replace(/\(UNVERIFIED\)|UNVERIFIED/g, UNV_BADGE);
+
+/**
+ * Desktop keeps the result on one screen: when an open line would push the page past the fold, the
+ * ledger caps its height and scrolls inside. Phones scroll the page as usual.
+ */
+function fitLedger() {
+  ledgerEl.style.maxHeight = "";
+  ledgerEl.classList.remove("capped");
+  if (!current || innerWidth < 1000 || stage.dataset.state !== "result") return;
+  const over = document.documentElement.scrollHeight - innerHeight;
+  if (over <= 0) return;
+  ledgerEl.style.maxHeight = `${Math.max(120, ledgerEl.clientHeight - over - 2)}px`;
+  ledgerEl.classList.add("capped");
+  const open = ledgerEl.querySelector<HTMLElement>(".ln[aria-pressed='true']")?.parentElement;
+  if (open) {
+    const top = open.offsetTop - ledgerEl.offsetTop;
+    if (top < ledgerEl.scrollTop || top + open.offsetHeight > ledgerEl.scrollTop + ledgerEl.clientHeight)
+      ledgerEl.scrollTop = Math.max(0, top + open.offsetHeight - ledgerEl.clientHeight);
+    if (open.offsetHeight > ledgerEl.clientHeight) ledgerEl.scrollTop = top;
+  }
+}
+
 function syncActive() {
   for (const btn of ledgerEl.querySelectorAll<HTMLButtonElement>(".ln")) {
     const on = Number(btn.dataset.idx) === active;
@@ -400,6 +580,7 @@ function syncActive() {
     btn.setAttribute("aria-expanded", String(on));
     (btn.nextElementSibling as HTMLElement).hidden = !on;
   }
+  fitLedger();
   renderMarks();
   const l = current && active >= 0 ? current.ledger[active] : null;
   if (l && l.spanStart >= 0) {
@@ -511,6 +692,8 @@ function showResult() {
   renderLedger(true);
   renderMarks();
   autosize();
+  renderScore();
+  pops.forEach((p) => p.close());
   shownNum = 0;
   renderNumbers(first ? 1100 : 800);
 
@@ -579,6 +762,8 @@ function relayout() {
   retarget();
   if (current) fitNumber(big(current.totals.bySource[selected].worth));
   autosize();
+  fitLedger();
+  pops.forEach((p) => p.place());
 }
 addEventListener("resize", relayout);
 

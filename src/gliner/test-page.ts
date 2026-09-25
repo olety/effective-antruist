@@ -37,6 +37,7 @@ async function load(): Promise<GlinerLoadInfo> {
   gpuBox.disabled = true;
   const info = await loadGliner({
     backend: gpuBox.checked ? "webgpu" : "wasm",
+    testNoDecompressionStream: q.get("nods") === "1",
     onProgress: ({ loadedBytes, totalBytes, phase }) => {
       bar.value = totalBytes ? loadedBytes / totalBytes : 0;
       readout.textContent = `${phase}: ${mb(loadedBytes)} / ${mb(totalBytes)} MB`;

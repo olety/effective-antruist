@@ -31,6 +31,8 @@ export interface LoadOptions {
   backend?: GlinerBackend;
   /** Directory that holds manifest.json. Default: `model/` next to the page's base URL. */
   baseUrl?: string;
+  /** Test only: delete DecompressionStream in the worker first, to exercise the raw-chunk fallback. */
+  testNoDecompressionStream?: boolean;
 }
 
 type Pending = { resolve: (v: never) => void; reject: (e: Error) => void };
@@ -89,7 +91,9 @@ export function loadGliner(opts: LoadOptions = {}): Promise<GlinerLoadInfo> {
   }
   if (!loadPromise) {
     const baseUrl = opts.baseUrl ?? new URL(`${import.meta.env.BASE_URL}model/`, location.href).href;
-    loadPromise = call<GlinerLoadInfo>({ type: "load", baseUrl, backend: opts.backend ?? DEFAULT_BACKEND }).then(
+    loadPromise = call<GlinerLoadInfo>({
+      type: "load", baseUrl, backend: opts.backend ?? DEFAULT_BACKEND, testNoDecompressionStream: opts.testNoDecompressionStream,
+    }).then(
       (i) => (info = i),
       (err) => {
         loadPromise = null;

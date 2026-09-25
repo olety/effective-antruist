@@ -97,6 +97,8 @@ async function load(baseUrl: string, want: Backend): Promise<GlinerLoadInfo> {
     backend,
     fromCache: bundle.fromCache,
     bytes: bundle.bytes,
+    wireBytes: bundle.wireBytes,
+    gzip: bundle.gzip,
     downloadMs: Math.round(bundle.downloadMs),
     compileMs: Math.round(t2 - t1),
     totalMs: Math.round(t2 - t0),
@@ -124,6 +126,7 @@ let queue: Promise<unknown> = Promise.resolve();
 scope.onmessage = (e) => {
   const msg = e.data;
   if (msg.type === "load") {
+    if (msg.testNoDecompressionStream) delete (self as { DecompressionStream?: unknown }).DecompressionStream;
     loading ??= load(msg.baseUrl, msg.backend);
     loading.then(
       (info) => post({ type: "loaded", id: msg.id, info }),

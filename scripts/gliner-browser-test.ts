@@ -1,7 +1,9 @@
 // Headless Chrome check of in-browser GLiNER: the default WASM backend cross-origin isolated
-// (COOP/COEP, so WASM threads), WASM without isolation (1 thread), then the opt-in WebGPU backend,
-// each in a fresh profile, each visited twice (the second visit must load from Cache Storage with
-// no /model/ requests). WASM must find the key spans (after the span rules) and keep every offset
+// (COOP/COEP, so WASM threads), WASM without isolation (1 thread), WASM with DecompressionStream
+// deleted in the worker (raw-chunk fallback), WASM with corrupt .gz responses (decode-failure
+// fallback), then the opt-in WebGPU backend, each in a fresh profile; wasm and webgpu are visited
+// twice (the second visit must load from Cache Storage with no /model/ requests). The first wasm
+// visit must fetch the model as .gz and nothing raw; the fallbacks must find the same spans. WASM must find the key spans (after the span rules) and keep every offset
 // exact; WebGPU only has to run (onnxruntime-web 1.30 corrupts its pair reranker; see src/gliner/index.ts).
 // Usage: bun run model && bun run test:gliner      (GLINER_TEST_URL=... to use a running server)
 import { chromium, type Request } from "playwright-core";
@@ -25,11 +27,19 @@ async function up(url: string) {
 }
 
 // COOP/COEP on every document unless its URL says coi=0 (what public/_headers does in production).
+// Vite's static server sends *.gz with Content-Encoding: gzip (the browser decodes it itself);
+// Cloudflare sends it as plain application/gzip, so drop that header here and let the page's
+// DecompressionStream do the work, as in production.
 function crossOriginIsolation(): Plugin {
   return {
     name: "test-coi",
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        if (req.url?.split("?")[0].endsWith(".gz")) {
+          const set = res.setHeader.bind(res);
+          res.setHeader = ((k: string, v: number | string | readonly string[]) =>
+            /^content-encoding$/i.test(k) ? res : set(k, /^content-type$/i.test(k) ? "application/gzip" : v)) as typeof res.setHeader;
+        }
         if (req.url?.includes("coi=0")) {
           // Keep vite.config.ts's own isolation headers off this document too.
           const set = res.setHeader.bind(res);
@@ -91,13 +101,19 @@ const browser = await chromium.launch({
   args: ["--enable-unsafe-webgpu", "--enable-features=Vulkan,WebGPU"],
 });
 try {
-  for (const mode of ["wasm", "wasm-1t", "webgpu"] as const) {
+  for (const mode of ["wasm", "wasm-1t", "wasm-nods", "wasm-badgz", "webgpu"] as const) {
     const ctx = await browser.newContext();
     const modelRequests: string[] = [];
     ctx.on("request", (r: Request) => {
       if (new URL(r.url()).pathname.startsWith("/model/")) modelRequests.push(r.url());
     });
-    for (const visit of mode === "wasm-1t" ? [1] : [1, 2]) {
+    // Every .gz answers with bytes that are not the chunk: the loader must fall back to the raw chunk.
+    if (mode === "wasm-badgz") {
+      await ctx.route(/\/model\/.*\.gz$/, (route) =>
+        route.fulfill({ status: 200, contentType: "application/gzip", body: Buffer.from([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 3, 1, 2, 3, 4]) }),
+      );
+    }
+    for (const visit of mode === "wasm" || mode === "webgpu" ? [1, 2] : [1]) {
       modelRequests.length = 0;
       const page = await ctx.newPage();
       page.on("pageerror", (e) => console.log("[pageerror]", e.message));
@@ -108,14 +124,17 @@ try {
         if (m.type() === "error" || m.type() === "warning") console.log(`[console.${m.type()}]`, m.text().slice(0, 300));
       });
       const t0 = Date.now();
-      const qs = `auto=1&extra=1&raw=1${mode === "webgpu" ? "&ep=webgpu" : ""}${mode === "wasm-1t" ? "&coi=0" : ""}`;
+      const qs = `auto=1&extra=1&raw=1${mode === "webgpu" ? "&ep=webgpu" : ""}${mode === "wasm-1t" ? "&coi=0" : ""}` +
+        `${mode === "wasm-nods" ? "&nods=1" : ""}`;
       await page.goto(`${BASE}/gliner-test.html?${qs}`);
       await page.waitForFunction(() => (window as any).__glinerTest?.done, null, { timeout: 300_000, polling: 100 });
       const wallMs = Date.now() - t0;
       const st = await page.evaluate(() => (window as any).__glinerTest);
       await page.close();
       const key = `${mode}#${visit}`;
-      report[key] = { wallMs, modelRequests: modelRequests.length, ...st };
+      const gzReq = modelRequests.filter((u) => u.endsWith(".gz")).length;
+      const binReq = modelRequests.filter((u) => u.endsWith(".bin")).length;
+      report[key] = { wallMs, modelRequests: modelRequests.length, gzRequests: gzReq, binRequests: binReq, ...st };
       console.log(`\n== ${key}: wall ${wallMs} ms, /model/ requests ${modelRequests.length}`);
       if (st.error) {
         fail(st.error);
@@ -123,18 +142,26 @@ try {
       }
       const i = st.info;
       console.log(`  backend ${i.backend}${i.note ? ` (${i.note})` : ""}, fromCache ${i.fromCache}, ` +
-        `${(i.bytes / 1e6).toFixed(1)} MB, download ${i.downloadMs} ms, compile+warm-up ${i.compileMs} ms, load total ${i.totalMs} ms, ` +
+        `${(i.bytes / 1e6).toFixed(1)} MB (${(i.wireBytes / 1e6).toFixed(1)} MB fetched, gzip ${i.gzip}; ${gzReq} .gz + ${binReq} .bin requests), download ${i.downloadMs} ms, compile+warm-up ${i.compileMs} ms, load total ${i.totalMs} ms, ` +
         `threads ${i.threads} (crossOriginIsolated ${st.crossOriginIsolated})`);
       for (const r of st.runs) console.log(`  ${r.id} (${r.chars} ch): infer ${r.inferMs} ms, round trip ${r.roundTripMs} ms\n     ${fmt(r.spans)}`);
       if (mode === "webgpu" && i.backend !== "webgpu") fail(`expected webgpu, got ${i.backend}`);
       if (mode !== "webgpu" && i.backend !== "wasm") fail(`expected wasm, got ${i.backend}`);
       if (mode === "wasm" && !(i.threads > 1)) fail(`isolated page ran ${i.threads} thread(s)`);
       if (mode === "wasm-1t" && i.threads !== 1) fail(`non-isolated page ran ${i.threads} threads`);
+      if (visit === 1 && (mode === "wasm" || mode === "wasm-1t") && (!i.gzip || binReq || !gzReq || !(i.wireBytes < i.bytes))) {
+        fail(`${mode}: expected the model as .gz only (gzip ${i.gzip}, ${gzReq} .gz, ${binReq} .bin, ${i.wireBytes} of ${i.bytes} bytes fetched)`);
+      }
+      if (mode === "wasm-nods" && (i.gzip || gzReq || !binReq)) fail(`wasm-nods: expected raw chunks only (gzip ${i.gzip}, ${gzReq} .gz, ${binReq} .bin)`);
+      if (mode === "wasm-badgz" && (i.gzip || !gzReq || !binReq)) fail(`wasm-badgz: expected .gz then raw (gzip ${i.gzip}, ${gzReq} .gz, ${binReq} .bin)`);
       for (const r of st.runs) {
         const got: string[] = r.spans.map(keyOf);
         if (!r.spans.some((s: any) => s.source === "gliner")) fail(`${r.id}: no model spans`);
         if (!r.offsetsOk) fail(`${r.id}: a span's offsets do not slice to its text`);
         if (mode !== "webgpu") {
+          if (wasmSpans[r.id] && (mode === "wasm-nods" || mode === "wasm-badgz") && got.join("|") !== wasmSpans[r.id].join("|")) {
+            fail(`${r.id} (${mode}): spans differ from the gz path`);
+          }
           wasmSpans[r.id] ??= got;
           const missing = (MUST[r.id] ?? []).filter((k) => !got.includes(k));
           if (missing.length) fail(`${r.id} (${mode}): missing ${missing.join(", ")}`);
