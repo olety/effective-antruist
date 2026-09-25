@@ -69,7 +69,8 @@ document.fonts.load("40px Meme", "BUG").finally(() => wall.renderText());
 const lazy = () => {
   // Nothing but the page itself is on the critical path: stickers slap on right after load.
   wall.load(INSECTS);
-  setTimeout(() => wall.load(), 40);
+  // The desktop model (94 MB) waits for the wall's stickers, at most 6 s, so it never starves them.
+  setTimeout(() => void Promise.race([wall.load(), new Promise((r) => setTimeout(r, 6000))]).then(bootBrain), 40);
   const idle = (cb: () => void) => ("requestIdleCallback" in window ? requestIdleCallback(cb, { timeout: 1200 }) : setTimeout(cb, 400));
   idle(() => void document.fonts.load("40px Marker", "0123456789,INSECTS"));
 };
@@ -833,8 +834,7 @@ const bootBrain = () =>
       brainGo.hidden = false;
     }
   });
-if (document.readyState === "complete") bootBrain();
-else addEventListener("load", bootBrain, { once: true });
+textEl.addEventListener("focus", bootBrain, { once: true });
 
 // ---- sound ------------------------------------------------------------------------------------
 

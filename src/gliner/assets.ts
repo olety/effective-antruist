@@ -72,7 +72,7 @@ async function cachedFile(cache: Cache | null, base: URL, f: ManifestFile): Prom
 }
 
 async function fetchChunk(url: string, onBytes: (n: number) => void): Promise<Uint8Array> {
-  const res = await fetch(url);
+  const res = await fetch(url, { priority: "low" } as RequestInit);
   if (!res.ok) throw new Error(`GLiNER bundle: HTTP ${res.status} for ${url}`);
   if (!res.body) {
     const buf = new Uint8Array(await res.arrayBuffer());

@@ -168,8 +168,9 @@ export class Wall {
     this.sprites.set(id, { src: [], frames: [], ready: true, readyAt: 0 });
   }
 
-  /** Start loading the listed stickers (or all registered). */
-  load(ids?: string[]) {
+  /** Start loading the listed stickers (or all registered); settles when they are in or failed. */
+  load(ids?: string[]): Promise<unknown> {
+    const jobs: Promise<unknown>[] = [];
     for (const [id, s] of this.sprites) {
       if (ids && !ids.includes(id)) continue;
       const urls = (s as Sprite & { urls?: string[] }).urls;
@@ -181,7 +182,7 @@ export class Wall {
         return img;
       });
       s.src = imgs;
-      Promise.all(imgs.map((i) => i.decode()))
+      const job = Promise.all(imgs.map((i) => i.decode()))
         .then(() => {
           s.frames = imgs.map((i) => this.prescale(i));
           s.ready = true;
@@ -191,7 +192,9 @@ export class Wall {
         .catch(() => {
           /* a missing sticker just stays blank */
         });
+      jobs.push(job);
     }
+    return Promise.all(jobs);
   }
 
   /** Text stickers render on the device, zero bytes. Call after the display font is ready. */
